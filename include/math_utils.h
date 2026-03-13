@@ -1,6 +1,6 @@
+#ifndef MATH_UTILS_H
+#define MATH_UTILS_H
 
+int min(int a, int b, int c);
 
-int min(int a, int b, int c) {
-    int temp = (a < b) ? a : b;
-    return (temp < c) ? temp : c;
-}
+#endif

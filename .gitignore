@@ -24,3 +24,12 @@ main
 # Build directories
 bin/
 obj/
+build/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+install_manifest.txt
+
+#agents directories
+.opencode

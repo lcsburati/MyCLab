@@ -1,11 +1,16 @@
 #ifndef STRING_UTILS_H
 #define STRING_UTILS_H
 
+
 static const int OFFSET = 'a' - 'A'; 
+
+#define STR_BUFFER 256
+
 
 typedef char * string;
 
-int my_strlen(string str);
+
+size_t my_strlen(string str);
 
 string my_tolower(string str);
 

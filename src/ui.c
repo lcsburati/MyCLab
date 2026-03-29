@@ -1,5 +1,7 @@
 #include <stdlib.h>
+
 #include "ui.h"
+#include "string_utils.h"
 
 Font mainFont;
 
@@ -157,10 +159,10 @@ void RenderStrlenPage(const char *input, int *activeField, int len) {
     barY += 20;
     Rectangle barOuter = { CONTENT_X, barY, CONTENT_W, 20 };
     DrawRectangleRounded(barOuter, 0.4f, 6, PANEL_BG);
-    float fillPct = (float)len / (MAX_INPUT - 1);
+    float fillPct = (float)len / (STR_BUFFER - 1);
     if (fillPct > 1.0f) fillPct = 1.0f;
     DrawRectangleRounded((Rectangle){ CONTENT_X + 2, barY + 2, (CONTENT_W - 4) * fillPct, 16 }, 0.4f, 6, ACCENT);
-    DrawTextEx(mainFont, TextFormat("%d / %d", len, MAX_INPUT - 1), (Vector2){ (float)CONTENT_X, barY + 28 }, FONT_SIZE_XS, 1, TEXT_MUTED);
+    DrawTextEx(mainFont, TextFormat("%d / %d", len, STR_BUFFER - 1), (Vector2){ (float)CONTENT_X, barY + 28 }, FONT_SIZE_XS, 1, TEXT_MUTED);
 }
 
 void RenderToLowerPage(const char *input, int *activeField, const char *result) {

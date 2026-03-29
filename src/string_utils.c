@@ -6,21 +6,21 @@
 #include "string_utils.h"
 
 
-int my_strlen(string str)
+size_t my_strlen(string str)
 {
-    int length = 0;
+    size_t length = 0;
 
-    while (*str)
+    while (*str && length < STR_BUFFER)
     {
-        length++;
-        str++;
+        length++, str++;
     }
+
     return length;
 }
 
 string my_tolower(string str)
 {
-    int length = my_strlen(str);
+    size_t length = my_strlen(str);
     string result = malloc(sizeof(char) * (length + 1));
     if (result == NULL)
     {
@@ -30,7 +30,7 @@ string my_tolower(string str)
     string current = result;
 
 
-    while (*str)
+    while (*str && length < STR_BUFFER)
     {
         if (*str >= 'A' && *str <= 'Z')
         {
@@ -46,6 +46,8 @@ string my_tolower(string str)
         }
     }
     *current = '\0';
+
+
     return result;
 }
 
@@ -60,7 +62,7 @@ string my_toupper(string str)
     }
     string current = result;
 
-    while (*str)
+    while (*str && length < STR_BUFFER)
     {
         if (*str >= 'a' && *str <= 'z')
         {
@@ -82,12 +84,12 @@ string my_toupper(string str)
 int my_strcmp(string str1, string str2)
 {
 
-    int str1_length = my_strlen(str1);
-    int str2_length = my_strlen(str2);
+    size_t str1_length = my_strlen(str1);
+    size_t str2_length = my_strlen(str2);
 
     if (str1_length > str2_length)
     {
-        while (*str1)
+        while (*str1 && str1_length < STR_BUFFER && str2_length < STR_BUFFER)
         {
             if (*str1 != *str2)
             {

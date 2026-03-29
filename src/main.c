@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
+
 #include "raylib.h"
 #include "string_utils.h"
 #include "math_utils.h"
@@ -9,15 +10,15 @@ int main(void) {
     InitUI();
 
     Screen currentScreen = SCREEN_STRLEN;
-    char i1[MAX_INPUT] = "", i2[MAX_INPUT] = "", i3[MAX_INPUT] = "";
+    char i1[STR_BUFFER] = "", i2[STR_BUFFER] = "", i3[STR_BUFFER] = "";
     int c1 = 0, c2 = 0, c3 = 0, activeField = 1;
     float navHover[SCREEN_COUNT] = {0};
 
     while (!WindowShouldClose()) {
         // --- Input Handling ---
-        if (activeField == 1) HandleTextInput(i1, &c1, MAX_INPUT);
-        else if (activeField == 2) HandleTextInput(i2, &c2, MAX_INPUT);
-        else HandleTextInput(i3, &c3, MAX_INPUT);
+        if (activeField == 1) HandleTextInput(i1, &c1, STR_BUFFER);
+        else if (activeField == 2) HandleTextInput(i2, &c2, STR_BUFFER);
+        else HandleTextInput(i3, &c3, STR_BUFFER);
 
         if (IsKeyPressed(KEY_TAB)) {
             activeField = (activeField % 3) + 1;

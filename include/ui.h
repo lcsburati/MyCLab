@@ -15,7 +15,6 @@
 #define FONT_SIZE_MD     20
 #define FONT_SIZE_SM     16
 #define FONT_SIZE_XS     13
-#define MAX_INPUT        256
 
 #define BG_DARK          (Color){ 26,  26,  30,  255 }
 #define BG_SIDEBAR       (Color){ 30,  30,  36,  255 }

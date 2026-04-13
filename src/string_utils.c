@@ -1,11 +1,12 @@
+/*Includes C Standarts Libs*/
 #include <stdio.h>
 #include <stdlib.h>
 
-
+/*Includes My C Libs*/
 #include "math_utils.h" 
 #include "string_utils.h"
 
-
+/*Functions*/
 size_t my_strlen(string str)
 {
     size_t length = 0;
@@ -16,6 +17,37 @@ size_t my_strlen(string str)
     }
 
     return length;
+}
+
+
+string my_toupper(string str)
+{
+    size_t length = my_strlen(str);
+    string result = malloc(sizeof(char) * (length + 1));
+    if (result == NULL)
+    {
+        printf("Memory allocation failed\n");
+        return NULL;
+    }
+    string current = result;
+
+    while (*str && length < STR_BUFFER)
+    {
+        if (*str >= 'a' && *str <= 'z')
+        {
+            *current = *str - OFFSET;
+            str++;
+            current++;
+        }
+        else
+        {
+            *current = *str;
+            str++;
+            current++;
+        }
+    }
+    *current = '\0';
+    return result;
 }
 
 string my_tolower(string str)
@@ -51,36 +83,6 @@ string my_tolower(string str)
     return result;
 }
 
-string my_toupper(string str)
-{
-    int length = my_strlen(str);
-    string result = malloc(sizeof(char) * (length + 1));
-    if (result == NULL)
-    {
-        printf("Memory allocation failed\n");
-        return NULL;
-    }
-    string current = result;
-
-    while (*str && length < STR_BUFFER)
-    {
-        if (*str >= 'a' && *str <= 'z')
-        {
-            *current = *str - OFFSET;
-            str++;
-            current++;
-        }
-        else
-        {
-            *current = *str;
-            str++;
-            current++;
-        }
-    }
-    *current = '\0';
-    return result;
-}
-
 int my_strcmp(string str1, string str2)
 {
 
@@ -98,9 +100,9 @@ int my_strcmp(string str1, string str2)
             str1++; str2++;
         }
     }
-    else
+    else if (str1_length < str2_length)
     {
-        while (*str2)
+        while (*str2 && str1_length < STR_BUFFER && str2_length < STR_BUFFER)
         {
             if (*str2 != *str1)
             {

@@ -41,7 +41,7 @@ make
 
 * OBS: A escolha de #define ao invés de const foi dada devido a simplicidade das variaveis, uma vez que a tipagem nao vai ser importante no tempo de execução.
 
-* typedef char * string: define um apelido para char*. Poderíamos ter trabalhado diretamente com ponteiros, mas, para facilitar o entendimento de como strings funcionam por baixo dos panos, optei por usar o apelido string para char*.
+* typedef char * string: define um apelido para char*. Poderíamos ter trabalhado diretamente com ponteiros, mas, para facilitar o entendimento de como strings funcionam por baixo dos panos, optei por usar o apelido string para char*. (Entendo que nao é uma boa prática em C esconder ponteiros em typedef's, mas o caso foi apenas para garantir o entendimento de que strings sao naturalmente ponteiros).
 
 ### string_utils.c
 
@@ -57,9 +57,9 @@ Começamos definindo a variável que será o contador do tamanho da string (arra
 
 A lógica a partir daí é simples: sabendo que toda string em C termina com o caractere nulo `\0`, podemos percorrer a string até encontrá-lo. Esse caractere é interpretado como `0` ou `false` (já que booleanos não existem nativamente em C), então podemos simplesmente usar `while (*str)` para indicar ao programa que ele deve percorrer o ponteiro iniciado na string de entrada até encontrar o `\0`. A cada iteração do loop, incrementamos `length` em 1, acumulando assim o tamanho da string.
 
-**OBS:** Acrescentamos, junto à condição do `while`, a verificação `length < STR_BUFFER`, para garantir que o input esteja protegido contra strings muito grandes, evitando possíveis _overflows_ ou tempos de espera indesejados. Além disso, é uma boa prática de segurança.
+**Verificação de entrada inválida:** A função verifica se a string é `NULL`; caso seja, retorna `0` imediatamente. Além disso, se durante a iteração o tamanho atingir ou ultrapassar `STR_BUFFER`, a função retorna `0` para evitar _overflows_ ou tempos de espera indesejados — é uma boa prática de segurança.
 
-**OBS2:** A função reconhece espaços (` `) como um caractere também. Ou seja, se você passar uma string com espaços, o tamanho retornado será o tamanho total da string, incluindo os espaços. Acho importante ressaltar isso, porque dependendo do contexto algumas funções/abordagens tratam o espaço como separador e acabam “ignorando” esse caractere (por exemplo, na leitura de entrada com `scanf("%s")`).
+**OBS:** A função reconhece espaços (` `) como um caractere também. Ou seja, se você passar uma string com espaços, o tamanho retornado será o tamanho total da string, incluindo os espaços. Acho importante ressaltar isso, porque dependendo do contexto algumas funções/abordagens tratam o espaço como separador e acabam “ignorando” esse caractere (por exemplo, na leitura de entrada com `scanf("%s")`).
 
 #### Exemplo de uso
 
@@ -84,9 +84,11 @@ Após a alocação, fazemos uma verificação para garantir que o `malloc` foi r
 
 Definimos também um ponteiro auxiliar `string current = result`. Isso nos permite percorrer e preencher o novo bloco de memória sem perder a referência do início do bloco (`result`), que será necessária para o retorno da função.
 
-A lógica de conversão percorre a string de entrada (`str`): verificamos se o caractere atual é uma letra minúscula; caso seja, convertemos para maiúscula subtraindo o valor de `OFFSET` (32) ao valor ASCII do caractere. Caso contrário, apenas copiamos o caractere original para o novo bloco. Aproveitamos para conferir o buffer dentro da condição para garantir a segurança da operação.
+A lógica de conversão percorre a string de entrada (`str`): verificamos se o caractere atual é uma letra minúscula; caso seja, convertemos para maiúscula subtraindo o valor de `OFFSET` (32) ao valor ASCII do caractere. Caso contrário, apenas copiamos o caractere original para o novo bloco.
 
 Ao final do loop, definimos o último caractere de `current` como `\0`, finalizando a string corretamente. Retornamos `result`, que aponta para o início da nova string agora em **UPPERCASE**.
+
+**Verificação de entrada vazia:** A função verifica se o tamanho da string é 0; caso seja, retorna `NULL` para evitar alocações desnecessárias e deixar claro que não há caracteres para converter.
 
 </details>
 
@@ -97,7 +99,9 @@ Nesta função, seguimos a mesma lógica de gerenciamento de memória da `my_tou
 
 A diferença fundamental reside na lógica de conversão: percorremos a string de entrada verificando se o caractere atual é uma letra **maiúscula**. Caso seja, realizamos a conversão para **minúscula** **acrescentando** o valor de `OFFSET` (32) ao valor ASCII do caractere. 
 
-Assim como nas outras funções, mantemos a segurança verificando o sucesso da alocação de memória e controlando o limite do buffer. Ao final, garantimos o fechamento da string com o caractere nulo `\0` e retornamos o ponteiro `result`, que aponta para o início da nova string convertida para **lowercase**.
+Assim como nas outras funções, mantemos a segurança verificando o sucesso da alocação de memória. Ao final, garantimos o fechamento da string com o caractere nulo `\0` e retornamos o ponteiro `result`, que aponta para o início da nova string convertida para **lowercase**.
+
+**Verificação de entrada vazia:** A função verifica se o tamanho da string é 0; caso seja, retorna `NULL` para evitar alocações desnecessárias e deixar claro que não há caracteres para converter.
 
 </details>
 
@@ -110,11 +114,13 @@ Aqui, o objetivo é comparar duas strings e retornar o resultado da comparação
 
 Começamos definindo duas variáveis que irão indicar o tamanho das duas strings.
 
-A partir disso, fazemos um `if` para verificar qual string é maior. Se for a primeira string, percorremos ela com um `while` (já que estamos trabalhando com ponteiros). Neste `while`, já acrescentamos a verificação do buffer e, dentro dele, comparamos se `*str1 != *str2`. Se for verdadeiro, retornamos 1; caso contrário, percorremos toda a string e, se forem iguais, a condição não é satisfeita e retornamos 0.
+A partir disso, fazemos um `if` para verificar qual string é maior. Se for a primeira string, percorremos ela com um `while` (já que estamos trabalhando com ponteiros). Neste `while`, comparamos se `*str1 != *str2`. Se for verdadeiro, retornamos 1; caso contrário, percorremos toda a string e, se forem iguais, a condição não é satisfeita e retornamos 0.
 
 A mesma lógica é aplicada em um `else if` caso a segunda string seja maior, retornando -1.
 
 Agora caso elas sejam de mesmo tamanho, utilizamos a str1 para percorrer a string e comparar com a str2. Se forem diferentes, retornamos 1; caso contrário, percorremos toda a string e, se forem iguais, a condição não é satisfeita e retornamos 0.
+
+**Verificação de entrada vazia:** A função verifica se alguma das strings tem tamanho 0. Se uma ou ambas forem vazias, retorna 1, indicando que são diferentes — isso cobre casos onde pelo menos uma entrada é inválida ou vazia.
 
 </details>
 
@@ -138,5 +144,7 @@ Em seguida, pegamos o **mínimo entre as 3 operações** — porque queremos o c
 Com o loop completo, a matriz está totalmente preenchida e o valor em `matrix[str1_length][str2_length]` é a distância final acumulada de todas as operações.
 
 A partir disso, usamos um condicional ternário para identificar qual string é maior e usar seu tamanho como denominador no cálculo da porcentagem. Por fim, liberamos o espaço alocado da matriz e retornamos a similaridade como `double`.
+
+**Verificação de entrada vazia:** A função verifica se alguma das strings tem tamanho 0. Se uma ou ambas forem vazias, retorna 1 (ou 100% de similaridade se ambas forem vazias), cobrindo edge cases de entrada inválida.
 
 </details>

@@ -41,7 +41,7 @@ make
 
 * OBS: The choice of #define instead of const was due to the simplicity of the variables, since typing will not be important at runtime.
 
-* `typedef char * string`: defines an alias for char*. We could have worked directly with pointers, but to facilitate understanding of how strings work under the hood, I chose to use the alias string for char*.
+* `typedef char * string`: defines an alias for char*. We could have worked directly with pointers, but to facilitate understanding of how strings work under the hood, I chose to use the alias string for char*. (I understand that hiding pointers in typedefs is not a good practice in C, but in this case it was only to ensure the understanding that strings are naturally pointers).
 
 ### string_utils.c
 
@@ -57,9 +57,9 @@ We start by defining the variable that will count the string (array) length, nam
 
 The logic from there is simple: knowing that every string in C ends with the null character `\0`, we can traverse the string until we find it. This character is interpreted as `0` or `false` (since booleans do not exist natively in C), so we can simply use `while (*str)` to indicate to the program that it should traverse the pointer starting at the input string until it finds the `\0`. With each loop iteration, we increment `length` by 1, accumulating the string size.
 
-**OBS:** We added, along with the `while` condition, the `length < STR_BUFFER` check, to ensure the input is protected against very large strings, avoiding potential _overflows_ or unwanted wait times. Additionally, it is a good security practice.
+**Invalid input check:** The function verifies if the string is `NULL`; if so, it immediately returns `0`. Additionally, if during iteration the length reaches or exceeds `STR_BUFFER`, the function returns `0` to prevent _overflows_ or unwanted wait times — it is a good security practice.
 
-**OBS2:** The function recognizes spaces (` `) as a character as well. That is, if you pass a string with spaces, the returned size will be the total string size, including spaces. I think it's important to mention this, because depending on the context some functions/approaches treat space as a separator and end up "ignoring" this character (for example, when reading input with `scanf("%s")`).
+**OBS:** The function recognizes spaces (` `) as a character as well. That is, if you pass a string with spaces, the returned size will be the total string size, including spaces. I think it's important to mention this, because depending on the context some functions/approaches treat space as a separator and end up "ignoring" this character (for example, when reading input with `scanf("%s")`).
 
 #### Usage Example
 
@@ -84,9 +84,11 @@ After allocation, we verify that `malloc` was successful; otherwise, the functio
 
 We also define an auxiliary pointer `string current = result`. This allows us to traverse and fill the new memory block without losing the reference to the beginning of the block (`result`), which will be necessary for the function return.
 
-The conversion logic traverses the input string (`str`): we check if the current character is a lowercase letter; if so, we convert to uppercase by subtracting the `OFFSET` value (32) from the ASCII value of the character. Otherwise, we simply copy the original character to the new block. We also check the buffer inside the condition to ensure operation safety.
+The conversion logic traverses the input string (`str`): we check if the current character is a lowercase letter; if so, we convert to uppercase by subtracting the `OFFSET` value (32) from the ASCII value of the character. Otherwise, we simply copy the original character to the new block.
 
 At the end of the loop, we set the last character of `current` to `\0`, correctly terminating the string. We return `result`, which points to the beginning of the new string now in **UPPERCASE**.
+
+**Empty input check:** The function verifies if the string length is 0; if so, it returns `NULL` to avoid unnecessary allocations and make it clear there are no characters to convert.
 
 </details>
 
@@ -97,7 +99,9 @@ In this function, we follow the same memory management logic as `my_toupper`, us
 
 The fundamental difference lies in the conversion logic: we traverse the input string checking if the current character is an **uppercase** letter. If it is, we convert to **lowercase** by **adding** the `OFFSET` value (32) to the ASCII value of the character.
 
-As with other functions, we maintain security by checking the success of memory allocation and controlling the buffer limit. At the end, we ensure the string is terminated with the null character `\0` and return the `result` pointer, which points to the beginning of the new string converted to **lowercase**.
+As with other functions, we maintain security by checking the success of memory allocation. At the end, we ensure the string is terminated with the null character `\0` and return the `result` pointer, which points to the beginning of the new string converted to **lowercase**.
+
+**Empty input check:** The function verifies if the string length is 0; if so, it returns `NULL` to avoid unnecessary allocations and make it clear there are no characters to convert.
 
 </details>
 
@@ -110,11 +114,13 @@ Here, the goal is to compare two strings and return the comparison result.
 
 We start by defining two variables that will indicate the sizes of the two strings.
 
-From there, we do an `if` to check which string is larger. If it is the first string, we traverse it with a `while` (since we are working with pointers). In this `while`, we already add the buffer check and, within it, compare if `*str1 != *str2`. If true, we return 1; otherwise, we traverse the entire string and, if they are equal, the condition is not satisfied and we return 0.
+From there, we do an `if` to check which string is larger. If it is the first string, we traverse it with a `while` (since we are working with pointers). In this `while`, compare if `*str1 != *str2`. If true, we return 1; otherwise, we traverse the entire string and, if they are equal, the condition is not satisfied and we return 0.
 
 The same logic is applied in an `else if` if the second string is larger, returning -1.
 
 Now, if they are the same size, we use str1 to traverse the string and compare with str2. If they are different, we return 1; otherwise, we traverse the entire string and, if they are equal, the condition is not satisfied and we return 0.
+
+**Empty input check:** The function verifies if either string has length 0. If one or both are empty, it returns 1, indicating they are different — this covers cases where at least one input is invalid or empty.
 
 </details>
 
@@ -138,5 +144,7 @@ Then, we take the **minimum among the 3 operations** — because we want the pat
 With the complete loop, the matrix is fully filled and the value at `matrix[str1_length][str2_length]` is the final accumulated distance of all operations.
 
 From there, we use a ternary conditional to identify which string is larger and use its size as the denominator in the percentage calculation. Finally, we free the allocated matrix space and return the similarity as `double`.
+
+**Empty input check:** The function verifies if either string has length 0. If one or both are empty, it returns 1 (or 100% similarity if both are empty), covering edge cases of invalid input.
 
 </details>

@@ -177,10 +177,13 @@ void RenderToLowerPage(const char *input, int *activeField, const char *result) 
     Rectangle field = { CONTENT_X, 118, CONTENT_W, INPUT_H };
     DrawInputField(field, input, "TYPE SOMETHING HERE...", *activeField == 1);
     if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && CheckCollisionPointRec(GetMousePosition(), field)) *activeField = 1;
-    if (result[0] == '\0' && input[0] != '\0') {
-        DrawResultCard("Result", "NULL input detected", 200, RED_ERR);
+    
+    if (input[0] == '\0') {
+        DrawResultCard("Result", "Empty input (returns NULL)", 200, ORANGE_WARN);
+    } else if (result[0] == '\0') {
+        DrawResultCard("Result", "NULL - no uppercase chars", 200, GREEN_OK);
     } else {
-        DrawResultCard("Result", result[0] != '\0' ? result : "(empty)", 200, GREEN_OK);
+        DrawResultCard("Result", result, 200, GREEN_OK);
     }
 }
 
@@ -190,10 +193,13 @@ void RenderToUpperPage(const char *input, int *activeField, const char *result) 
     Rectangle field = { CONTENT_X, 118, CONTENT_W, INPUT_H };
     DrawInputField(field, input, "type something here...", *activeField == 1);
     if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && CheckCollisionPointRec(GetMousePosition(), field)) *activeField = 1;
-    if (result[0] == '\0' && input[0] != '\0') {
-        DrawResultCard("Result", "NULL input detected", 200, RED_ERR);
+    
+    if (input[0] == '\0') {
+        DrawResultCard("Result", "Empty input (returns NULL)", 200, ORANGE_WARN);
+    } else if (result[0] == '\0') {
+        DrawResultCard("Result", "NULL - no lowercase chars", 200, ACCENT);
     } else {
-        DrawResultCard("Result", result[0] != '\0' ? result : "(empty)", 200, ACCENT);
+        DrawResultCard("Result", result, 200, ACCENT);
     }
 }
 

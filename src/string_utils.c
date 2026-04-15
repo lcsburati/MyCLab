@@ -11,13 +11,18 @@ size_t my_strlen(string str)
 {
     if (str == NULL)
     {
-        return 1;
+        return 0;
     }
 
     size_t length = 0;
 
-    while (*str && length < STR_BUFFER)
+    while (*str)
     {
+        if (length >= STR_BUFFER)
+        {
+            return 0;
+        }
+
         length++, str++;
     }
 
@@ -32,6 +37,12 @@ string my_toupper(string str)
     }
 
     size_t length = my_strlen(str);
+
+    if (length == 0)
+    {
+        return NULL;
+    }
+
     string result = malloc(sizeof(char) * (length + 1));
     if (result == NULL)
     {
@@ -40,7 +51,7 @@ string my_toupper(string str)
     }
     string current = result;
 
-    while (*str && length < STR_BUFFER)
+    while (*str)
     {
         if (*str >= 'a' && *str <= 'z')
         {
@@ -67,6 +78,12 @@ string my_tolower(string str)
     }
 
     size_t length = my_strlen(str);
+
+    if (length == 0)
+    {
+        return NULL;
+    }
+
     string result = malloc(sizeof(char) * (length + 1));
     if (result == NULL)
     {
@@ -76,7 +93,7 @@ string my_tolower(string str)
     string current = result;
 
 
-    while (*str && length < STR_BUFFER)
+    while (*str)
     {
         if (*str >= 'A' && *str <= 'Z')
         {
@@ -107,7 +124,12 @@ int my_strcmp(string str1, string str2)
     size_t str1_length = my_strlen(str1);
     size_t str2_length = my_strlen(str2);
 
-    if (str1_length > str2_length && str1_length < STR_BUFFER && str2_length < STR_BUFFER)
+    if (str1_length == 0 || str2_length == 0)
+    {
+        return 1;
+    }
+
+    if (str1_length > str2_length)
     {
         while (*str1)
         {
@@ -118,7 +140,7 @@ int my_strcmp(string str1, string str2)
             str1++; str2++;
         }
     }
-    else if (str1_length < str2_length && str1_length < STR_BUFFER && str2_length < STR_BUFFER)
+    else if (str1_length < str2_length)
     {
         while (*str2)
         {
@@ -130,7 +152,7 @@ int my_strcmp(string str1, string str2)
         }
     }
 
-    else if (str1_length == str2_length && str1_length < STR_BUFFER && str2_length < STR_BUFFER)
+    else if (str1_length == str2_length)
     {
         while (*str1)
         {
@@ -159,6 +181,11 @@ double my_strcmp_percent(string str1, string str2)
     size_t str1_length = my_strlen(str1);
     size_t str2_length = my_strlen(str2);
     
+    if (str1_length == 0 || str2_length == 0)
+    {
+        return 1;
+    }
+
     /*Heap Space Allocation*/
     int **matrix = malloc((str1_length + 1) * sizeof(int*));
     for (int i = 0; i <= str1_length; i++) {

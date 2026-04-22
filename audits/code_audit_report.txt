@@ -1,0 +1,665 @@
+================================================================================
+                       MyCLib -- Senior C Code Audit Report
+================================================================================
+
+Date:       2026-04-22
+Auditor:    Senior C Code Auditor (automated)
+Codebase:   MyCLib
+
+================================================================================
+1. EXECUTIVE SUMMARY
+================================================================================
+
+MyCLib is a small educational C99 project that re-implements a handful of C
+standard-library string functions (strlen, toupper, tolower, strcmp) along with
+a Levenshtein-distance similarity function and a three-argument min().  A Raylib
+GUI (self-described as AI-generated) serves as a visual front-end.
+
+The codebase is compact (~708 lines across 4 source files and 3 headers) and
+builds cleanly with CMake.  However, the audit revealed several findings across
+every severity tier:
+
+  HIGH:  4 findings  -- incorrect strcmp semantics, unchecked malloc in
+         Levenshtein, undefined-behavior from atoi(), and a read-past-end bug
+         in my_strcmp.
+  MEDIUM: 7 findings -- type/signedness mismatches, const-correctness gaps,
+         missing size_t include, per-frame heap allocations, global mutable
+         font, naming collision with POSIX min(), and missing newlines at EOF.
+  LOW:   5 findings  -- typedef obscuring pointer, missing header include
+         guards for <stddef.h>, code duplication in toupper/tolower,
+         hardcoded font path, and no test suite.
+
+All findings below are evidence-based, with file paths, function names, and
+line numbers.
+
+================================================================================
+2. BUILD & RUN REPRO NOTES
+================================================================================
+
+Build environment:
+  - macOS Darwin 24.5.0, arm64
+  - Apple clang 17.0.0 (clang-1700.0.13.5)
+  - CMake 4.3.0
+  - Raylib installed via Homebrew at /opt/homebrew
+
+Build procedure (clean, maximum warnings):
+
+  mkdir /tmp/myclib_audit_build && cd /tmp/myclib_audit_build
+  cmake <project_root> \
+    -DCMAKE_C_FLAGS="-Wall -Wextra -Wpedantic -Wshadow -Wconversion \
+    -Wsign-conversion -Wformat=2 -Wundef -Wstrict-prototypes \
+    -Wmissing-prototypes -Wcast-qual -Wpointer-arith -Wvla"
+  make
+
+Result: BUILD SUCCEEDED with 25 warnings total.
+
+Warning breakdown (by category):
+  -Wnewline-eof                                  7 warnings  (all files)
+  -Wshorten-64-to-32 / implicit precision loss    5 warnings  (main.c, ui.c, string_utils.c)
+  -Wsign-compare                                  8 warnings  (ui.c, string_utils.c)
+  -Wincompatible-pointer-types-discards-qualifiers 2 warnings  (ui.c)
+
+AddressSanitizer/UBSan build: also succeeded (same warnings, no runtime
+diagnostic without GUI interaction).
+
+Static analysis (clang --analyze): clean -- no additional findings beyond
+compiler warnings.
+
+cppcheck / clang-tidy: NOT available on this system; recommend installing for
+CI integration.
+
+================================================================================
+3. HIGH SEVERITY FINDINGS (Must Fix)
+================================================================================
+
+**Finding:** my_strcmp semantics deviate from standard strcmp and contain a
+             read-past-end bug
+- Severity: High
+- Location: `src/string_utils.c` -- `my_strcmp()` -- lines 117-171
+- Problem:
+    1. INCORRECT LOOP BOUNDS (read past null terminator):
+       When str1_length > str2_length (line 132), the while loop iterates
+       with `while (*str1)` (line 134), which walks str1 to its end.  But
+       str2 is shorter, so after str2's null terminator is reached, the loop
+       continues to read memory past str2's '\0'.  This is undefined behavior
+       -- the comparison `*str1 != *str2` at line 136 reads str2 beyond its
+       allocated/valid range.
+
+       The symmetric case (str1_length < str2_length, line 143) has the same
+       bug in reverse: `while (*str2)` walks past str1's end.
+
+    2. SEMANTIC DEVIATION: Standard strcmp returns the difference of the first
+       differing characters (positive, negative, or zero).  This implementation
+       returns only {-1, 0, 1} and ties the sign to *string length* rather
+       than *lexicographic ordering*.  For example, "zz" vs "aaa" returns -1
+       (because str1 is shorter), not a positive number (because 'z' > 'a').
+       The UI labels reference "lexicographic" comparison, which is misleading.
+
+    3. When str1_length == str2_length and they differ, the function always
+       returns 1 (line 161).  Standard strcmp would return either positive or
+       negative depending on which string is "greater".  So "abc" vs "abd"
+       returns 1, but "abd" vs "abc" also returns 1 -- it cannot distinguish
+       ordering.
+
+- Impact: Undefined behavior (reading past buffer); incorrect comparison
+  results for many inputs; makes the function unreliable as a building block.
+- Recommendation: Iterate using the shorter length as a bound, compare
+  character-by-character by dereferencing both pointers within bounds, and
+  return the difference of the first mismatching characters (or the length
+  difference if one string is a prefix of the other).
+- Effort: M
+- Confidence: High
+
+--------
+
+**Finding:** Unchecked malloc return in my_strcmp_percent (partial allocation leak)
+- Severity: High
+- Location: `src/string_utils.c` -- `my_strcmp_percent()` -- lines 190-193
+- Problem: The function allocates `matrix` as an array of row pointers
+  (line 190), then in a loop allocates each row (lines 191-193).  Neither
+  allocation is checked for NULL.  If the outer malloc fails, the subsequent
+  loop dereferences NULL (UB / crash).  If an inner malloc fails mid-loop,
+  the already-allocated rows leak and the function proceeds to write through
+  a NULL pointer.  The TODO.md already acknowledges this bug.
+- Impact: Crash or memory corruption under low-memory conditions; technically
+  undefined behavior.
+- Recommendation: Check every malloc return.  On failure of an inner
+  allocation, free all previously allocated rows and the outer array, then
+  return a sentinel value (e.g., -1.0 or 0.0 with documented semantics).
+- Effort: S
+- Confidence: High
+
+--------
+
+**Finding:** Unsafe use of atoi() for integer parsing
+- Severity: High
+- Location: `src/main.c` -- `main()` -- line 66
+- Problem: `atoi(i1)`, `atoi(i2)`, `atoi(i3)` are called on raw user input.
+  atoi() has undefined behavior on overflow/underflow (C99 7.20.1) and cannot
+  distinguish "0" from a non-numeric input like "hello" (both return 0).
+  The input fields accept arbitrary printable characters (letters, symbols),
+  so non-numeric input is routine.  The TODO.md already flags this.
+- Impact: Silent incorrect results for non-numeric input; potential UB on
+  extreme values (e.g., "99999999999999999999").
+- Recommendation: Replace atoi() with strtol() with proper error handling
+  (check errno and endptr).  Alternatively, restrict the input field to
+  accept only digit characters and an optional leading minus sign.
+- Effort: S
+- Confidence: High
+
+--------
+
+**Finding:** my_strlen returns 0 for strings at exactly STR_BUFFER length
+             (silent data loss)
+- Severity: High
+- Location: `src/string_utils.c` -- `my_strlen()` -- lines 21-24
+- Problem: The guard `if (length >= STR_BUFFER)` at line 21 returns 0 when
+  the accumulated length reaches STR_BUFFER (256).  A legitimate string of
+  exactly 256 characters (fitting in a 257-byte buffer) would trigger this
+  guard and return 0 -- a false "empty" result.  More importantly, every
+  downstream function that checks `if (length == 0) return NULL/1` will
+  misinterpret a 256-char string as empty.
+
+  Additionally, the sentinel return value 0 is indistinguishable from an
+  actual empty string, so callers cannot differentiate "too long" from
+  "empty".
+
+- Impact: Silently wrong results for edge-case string lengths; cascading
+  failures in toupper/tolower/strcmp/strcmp_percent.
+- Recommendation: Either increase the threshold, use SIZE_MAX or (size_t)-1
+  as an error sentinel, or remove the guard entirely (the caller already
+  constrains buffer size to STR_BUFFER in HandleTextInput).
+- Effort: S
+- Confidence: High
+
+================================================================================
+4. MEDIUM SEVERITY FINDINGS (Should Fix)
+================================================================================
+
+**Finding:** Signed/unsigned type mismatches throughout codebase
+- Severity: Medium
+- Location: `src/string_utils.c` -- `my_strcmp_percent()` -- lines 191-222;
+            `src/main.c` -- lines 35, 58; `src/ui.c` -- lines 219-220
+- Problem: my_strlen() returns `size_t` but results are stored in `int`
+  variables in main.c (line 58: `int l1 = my_strlen(i1)`) and ui.c
+  (line 219-220).  In my_strcmp_percent, loop variables are `int` but
+  compared against `size_t` values (6 warning sites).  The build produces
+  13 warnings for these mismatches.  On 64-bit platforms, `size_t` is
+  8 bytes while `int` is 4 -- truncation is possible for strings > 2^31.
+- Impact: Potential truncation bugs on very long strings; masks real bugs;
+  warning noise obscures more serious issues.
+- Recommendation: Use `size_t` consistently for all length variables and
+  loop indices that interact with string lengths.
+- Effort: S
+- Confidence: High
+
+--------
+
+**Finding:** const-correctness violations in string_utils API
+- Severity: Medium
+- Location: `include/string_utils.h` -- lines 14-18;
+            `src/string_utils.c` -- all functions
+- Problem: The `string` typedef is `char *`, so every function parameter
+  typed as `string` accepts a mutable pointer.  Functions like my_strlen,
+  my_strcmp, and my_strcmp_percent never modify their input, yet their
+  signatures do not promise this via `const`.  This causes the compiler
+  warning at ui.c:219-220 when passing `const char *` arguments, and it
+  prevents callers from passing const strings without a cast.
+- Impact: Prevents safe use from const-correct code; triggers compiler
+  warnings; violates the principle of least privilege.
+- Recommendation: Add a `const_string` typedef (`const char *`) or change
+  parameters directly to `const char *` for read-only functions.
+- Effort: S
+- Confidence: High
+
+--------
+
+**Finding:** Missing <stddef.h> or <stdlib.h> include in string_utils.h
+- Severity: Medium
+- Location: `include/string_utils.h` -- line 14
+- Problem: The header declares `size_t my_strlen(string str)` but does not
+  include <stddef.h> or <stdlib.h>, which define `size_t`.  The header
+  compiles only because the .c files that include it happen to include
+  <stdlib.h> first.  If any translation unit includes string_utils.h before
+  any standard header, compilation will fail.
+- Impact: Fragile include ordering; breaks compilation in certain include
+  orders.
+- Recommendation: Add `#include <stddef.h>` at the top of string_utils.h
+  (stddef.h is lightweight and the canonical home of size_t).
+- Effort: S
+- Confidence: High
+
+--------
+
+**Finding:** Per-frame heap allocation in tolower/toupper paths
+- Severity: Medium
+- Location: `src/main.c` -- lines 39-48 (SCREEN_TOLOWER and SCREEN_TOUPPER
+            cases inside the render loop)
+- Problem: Every frame (60 FPS), my_tolower() or my_toupper() is called,
+  which mallocs a new string, and then it is immediately freed.  At 60 FPS,
+  this is 60 malloc+free cycles per second on potentially 256-byte blocks.
+  While not catastrophic, it is unnecessary churn and produces heap
+  fragmentation over long sessions.
+- Impact: Unnecessary allocator pressure; potential micro-stutters in a
+  real-time rendering loop; poor pattern for a GUI application.
+- Recommendation: Cache the result and recompute only when input changes
+  (dirty flag), or use a stack-allocated buffer since the maximum size is
+  known (STR_BUFFER).
+- Effort: M
+- Confidence: Medium
+
+--------
+
+**Finding:** Global mutable state for Font
+- Severity: Medium
+- Location: `src/ui.c` -- line 6 (`Font mainFont;`)
+- Problem: `mainFont` is a global non-static variable, visible to all
+  translation units.  Any file that declares `extern Font mainFont` can
+  mutate it.  In a larger project, this creates hidden coupling and makes
+  the UI module harder to test or reuse.
+- Impact: Maintainability risk; no encapsulation of UI resources.
+- Recommendation: Make `mainFont` static and provide accessor functions
+  if needed, or pass it through a context struct.
+- Effort: S
+- Confidence: High
+
+--------
+
+**Finding:** Name collision risk: `min()` shadows POSIX/common macro
+- Severity: Medium
+- Location: `include/math_utils.h` -- line 4;
+            `src/math_utils.c` -- lines 3-7
+- Problem: `min` is a very common name.  On many platforms (Windows
+  <windows.h>, various POSIX extensions, C++ <algorithm>), `min` is
+  defined as a macro.  Using it as a function name can cause silent
+  macro expansion, compilation errors, or wrong behavior when porting.
+- Impact: Portability risk; surprising errors when adding new headers.
+- Recommendation: Rename to `my_min` or `int_min3` to match the project's
+  `my_` prefix convention and avoid collisions.
+- Effort: S
+- Confidence: High
+
+--------
+
+**Finding:** Missing newlines at end of files
+- Severity: Medium
+- Location: `include/string_utils.h` line 21, `include/math_utils.h` line 6,
+            `src/string_utils.c` line 228, `src/math_utils.c` line 7
+- Problem: POSIX and the C standard (5.1.1.2) require source files to end
+  with a newline.  All four of these files lack one, producing 7 compiler
+  warnings.
+- Impact: Non-conforming source; noisy build output.
+- Recommendation: Add a trailing newline to each file.
+- Effort: S
+- Confidence: High
+
+================================================================================
+5. LOW SEVERITY FINDINGS (Nice to Have)
+================================================================================
+
+**Finding:** `typedef char * string` obscures pointer semantics
+- Severity: Low
+- Location: `include/string_utils.h` -- line 11
+- Problem: Hiding pointer types behind typedefs is widely considered bad
+  practice in C (Linux kernel coding style, CERT C, etc.) because it makes
+  const-qualification ambiguous (`const string` means `char * const`, not
+  `const char *`) and surprises readers.  The README acknowledges this is
+  intentional for pedagogical reasons.
+- Impact: Confuses const-correctness (see Medium finding above); misleads
+  readers about ownership semantics (is `string` an owning pointer or a
+  borrow?).
+- Recommendation: For production code, use `char *` directly and document
+  ownership via comments or naming (e.g., `owned_str`, `borrowed_str`).
+  For educational context, this is acceptable if clearly documented.
+- Effort: S
+- Confidence: High
+
+--------
+
+**Finding:** Code duplication between my_toupper and my_tolower
+- Severity: Low
+- Location: `src/string_utils.c` -- `my_toupper()` lines 32-71,
+            `my_tolower()` lines 73-115
+- Problem: The two functions are nearly identical -- they differ only in the
+  character range check and the direction of the OFFSET operation.  This is
+  ~40 lines of duplicated logic (NULL check, strlen call, malloc, loop
+  structure, null termination).
+- Impact: Maintenance burden: a bug fix in one must be mirrored in the other.
+- Recommendation: Extract a common helper like
+  `static string case_convert(string str, char from_lo, char from_hi, int offset)`
+  that both functions delegate to.
+- Effort: S
+- Confidence: High
+
+--------
+
+**Finding:** Hardcoded font path with no fallback
+- Severity: Low
+- Location: `src/ui.c` -- `InitUI()` -- line 19
+- Problem: `LoadFontEx("resources/font.ttf", 96, 0, 0)` uses a relative
+  path.  If the working directory is not the build directory (e.g., running
+  from an IDE or double-clicking), the font fails to load.  Raylib's
+  LoadFontEx returns a default font on failure, so the app will not crash,
+  but glyphs may render incorrectly or fall back to a bitmap font.
+- Impact: Broken rendering if CWD is unexpected; no error message to user.
+- Recommendation: Check if the font loaded successfully (e.g., compare
+  against GetFontDefault()), log an error, and either fall back gracefully
+  or use an absolute/configurable path.
+- Effort: S
+- Confidence: Medium
+
+--------
+
+**Finding:** No automated test suite
+- Severity: Low
+- Location: Project-wide
+- Problem: There are no unit tests for any of the library functions.  The
+  only way to verify behavior is through manual GUI interaction.  The
+  TODO.md lists "Automated tests" as future work.
+- Impact: Bugs (like the my_strcmp issues) persist undetected; refactoring
+  is risky without a safety net.
+- Recommendation: Add a test runner (e.g., a simple main_test.c with assert
+  macros, or integrate a lightweight framework like minunit or Unity).  Test
+  edge cases: NULL inputs, empty strings, strings at STR_BUFFER boundary,
+  identical strings, single-character strings.
+- Effort: M
+- Confidence: High
+
+--------
+
+**Finding:** Unused Section enum
+- Severity: Low
+- Location: `include/ui.h` -- lines 47-50 (Section enum)
+- Problem: The `Section` enum (SECTION_STRING, SECTION_MATH) is declared but
+  never used anywhere in the codebase.  The sidebar logic in ui.c uses
+  hardcoded integer arrays instead.
+- Impact: Dead code; minor clutter.
+- Recommendation: Either use it to drive the sidebar logic or remove it.
+- Effort: S
+- Confidence: High
+
+================================================================================
+6. DOCUMENTATION & README AUDIT
+================================================================================
+
+Strengths:
+  - README.md is thorough and well-structured with expandable sections.
+  - Three language versions (EN, PT-BR, ZH-CN) show audience awareness.
+  - The "Important Notice" clearly attributes AI-generated files.
+  - Function-by-function explanations are pedagogically valuable.
+
+Issues:
+  1. The README title says "MyClab" (line 1) but the project is "MyCLib"
+     everywhere else (CMakeLists.txt, window title, LICENSE).  Typo.
+     Location: README.md line 1.
+
+  2. README documents only string_utils functions.  math_utils (min) and
+     the UI layer are not documented.  The function index in the README
+     does not mention min() at all.
+
+  3. The README states my_strcmp_percent returns "1 (or 100% similarity if
+     both are empty)" (line 148), but the code returns 1.0 (a double),
+     which represents 1% similarity, not 100%.  This is contradicted by
+     the code at line 184-187 of string_utils.c, which returns 1 for
+     empty input -- meaning 1% similarity, not 100%.  The documentation
+     is misleading.
+
+  4. Asset filenames have a typo: "exemple" instead of "example"
+     (my_strlen_exemple.png, my_strlen_exemple2.png).
+
+  5. No CONTRIBUTING guide or coding style document.
+
+  6. LICENSE says "Copyright (c) 2026" -- unusual (future date from the
+     perspective of most readers); verify this is intentional.
+
+================================================================================
+7. RAYLIB / UI-SPECIFIC REVIEW
+================================================================================
+
+The UI layer was generated by AI; review focuses on correctness and
+maintainability rather than UI authorship.
+
+**Finding:** DrawSidebar has too many parameters (9 arguments)
+- Severity: Low (design)
+- Location: `src/ui.c` -- `DrawSidebar()` -- line 112
+- Problem: The function takes 9 parameters including 3 input buffers, 3
+  count pointers, a screen pointer, an active-field pointer, and a hover
+  array.  This is a code smell indicating the function does too much (it
+  both draws AND handles navigation state changes including buffer resets).
+- Recommendation: Group related state into a struct (e.g., `AppState`)
+  and pass a pointer to it.
+
+**Finding:** Blinking cursor uses GetTime() cast to int for timing
+- Severity: Low
+- Location: `src/ui.c` -- `DrawInputField()` -- line 64
+- Problem: `(int)(GetTime() * 2.5f) % 2 == 0` casts a float product to
+  int.  For very large GetTime() values (app running for hours), the float
+  precision degrades.  This is cosmetic-only but worth noting.
+- Recommendation: Use fmod() for cleaner periodic behavior.
+
+**Finding:** HandleTextInput single-key-at-a-time backspace
+- Severity: Low
+- Location: `src/ui.c` -- `HandleTextInput()` -- lines 102-109
+- Problem: Backspace handling has two separate blocks: one for
+  IsKeyPressed (line 102) and one for IsKeyPressedRepeat (line 106).
+  The repeat block also checks IsKeyDown, which is redundant since
+  IsKeyPressedRepeat implies the key is held.  The structure is correct
+  but unnecessarily verbose.
+
+**Finding:** No keyboard shortcut documentation; TAB cycling not discoverable
+- Severity: Low
+- Location: `src/main.c` -- line 23
+- Problem: TAB cycles active fields, but there is no on-screen hint for this.
+  Users must discover it by accident.
+- Recommendation: Add a small help text or tooltip.
+
+**Finding:** Static layout -- no responsiveness
+- Severity: Low (design)
+- Location: `include/ui.h` -- lines 6-11 (hardcoded WIN_W, WIN_H, etc.)
+- Problem: Window size and all layout constants are compile-time #defines.
+  The window cannot be resized.  This is acceptable for a demo app but
+  noted for completeness.
+
+**Finding:** TextFormat() return value is a static buffer
+- Severity: Medium (correctness risk)
+- Location: `src/ui.c` -- multiple call sites (lines 87, 160, 171, 232,
+            236, 276, 278, 297, 298)
+- Problem: Raylib's TextFormat() returns a pointer to an internal static
+  buffer (up to MAX_TEXTFORMAT_BUFFERS, typically 4, in a round-robin).
+  If more than 4 TextFormat() calls are made before the results are
+  consumed (i.e., drawn), earlier results are silently overwritten.  In
+  most Render* functions, TextFormat is called once or twice before
+  drawing, which is safe.  However, in RenderStrcmpPage (lines 228-250),
+  there are two TextFormat calls close together -- currently safe but
+  fragile under modification.
+- Recommendation: Be aware of this limit.  For safety, use snprintf into
+  local buffers for complex formatting sequences.
+
+================================================================================
+8. ARCHITECTURE & DESIGN NOTES
+================================================================================
+
+Module structure:
+  src/string_utils.c + include/string_utils.h  -- core string functions
+  src/math_utils.c   + include/math_utils.h    -- min() only
+  src/ui.c           + include/ui.h            -- Raylib UI layer
+  src/main.c                                   -- entry point, game loop
+
+Observations:
+
+  1. SEPARATION OF CONCERNS: The project correctly separates backend logic
+     (string_utils, math_utils) from the UI layer.  main.c acts as a thin
+     controller.  This is good design for this scale.
+
+  2. OWNERSHIP MODEL: my_toupper/my_tolower return heap-allocated strings.
+     Callers are responsible for freeing them.  This is documented implicitly
+     by the code in main.c (lines 41, 48) but not by comments or naming
+     convention.  Consider naming the functions to indicate ownership
+     transfer (e.g., `my_toupper_alloc`) or documenting the contract in
+     the header.
+
+  3. ERROR PROPAGATION: Functions use return values for errors (NULL for
+     pointers, 0 for strlen, 1 for strcmp).  However, the sentinel values
+     overlap with valid return values (strlen 0 = empty or error; strcmp 1
+     = different or error).  A more robust approach would use out-parameters
+     or dedicated error codes.
+
+  4. SCALABILITY: The Screen enum and sidebar logic assume a fixed set of
+     screens.  Adding a new function requires changes in 3+ places (enum,
+     navLabels, sectionStarts, main.c switch).  A registration/table-driven
+     approach would be more maintainable.
+
+  5. INCLUDE STRUCTURE: string_utils.c includes math_utils.h (for the min
+     function used in Levenshtein).  This creates a dependency from string
+     utilities on math utilities.  For a small project this is fine, but
+     for a library, consider making Levenshtein a separate module.
+
+================================================================================
+9. PERFORMANCE & PROFILING SUGGESTIONS
+================================================================================
+
+For a ~700-line demo app, performance is not a primary concern.  However:
+
+  1. LEVENSHTEIN MATRIX: my_strcmp_percent allocates an (n+1) x (m+1) matrix
+     on the heap.  For the current STR_BUFFER of 256, this is up to 257*257
+     *4 = ~264 KB per call, at 60 FPS = ~15 MB/s of allocation throughput.
+     This can be reduced to O(min(n,m)) space by using only two rows
+     (current and previous), or even a single row with a temp variable.
+     This also eliminates the multi-malloc/multi-free overhead.
+
+  2. PER-FRAME STRING OPERATIONS: my_strlen is called multiple times per
+     frame on the same strings (once in the Render function, once
+     internally by toupper/tolower).  Caching lengths would avoid redundant
+     traversals, though the cost is negligible at STR_BUFFER=256.
+
+  3. FONT SIZE: The font is loaded at 96px but rendered at 10-26px.
+     This means the GPU stores a large atlas that is always downsampled.
+     Loading at a smaller size (e.g., 32px) would reduce texture memory.
+     Alternatively, load multiple sizes for different use cases.
+
+  4. PROFILING: For future profiling, Instruments (macOS) with the Time
+     Profiler and Allocations instruments would be the appropriate tools.
+     For heap analysis, run with `-fsanitize=address` and
+     ASAN_OPTIONS=detect_leaks=1 (note: leak detection is limited on
+     macOS).
+
+================================================================================
+10. TOOLING RECOMMENDATIONS
+================================================================================
+
+  1. INSTALL cppcheck and clang-tidy:
+       brew install cppcheck llvm
+     Then add to CI:
+       cppcheck --enable=all --std=c99 src/ include/
+       clang-tidy src/*.c -- -I include/ -std=c99
+
+  2. ADD WARNING FLAGS TO CMakeLists.txt:
+     The current CMakeLists.txt only uses `-Wall -Wno-missing-braces`.
+     Recommend adding at minimum: -Wextra -Wsign-compare -Wconversion
+     The `-Wno-missing-braces` flag suppresses a valid warning for compound
+     literal initialization; it was likely added to silence Raylib Color
+     initializations, but consider scoping it more narrowly.
+
+  3. ADD A .clang-format FILE:
+     Enforce consistent style across the hand-written and AI-generated code.
+     Brace style and indentation differ between string_utils.c (Allman) and
+     ui.c (K&R-ish).
+
+  4. ADD CI (GitHub Actions):
+     A simple workflow that builds with warnings-as-errors (-Werror) would
+     catch regressions.  Example stages: cmake configure, build, test.
+
+  5. CONSIDER A SANITIZER BUILD IN CI:
+     `-fsanitize=address,undefined` catches buffer overflows and UB at
+     runtime.  Pair with a simple test driver that exercises all functions.
+
+  6. VALGRIND (if on Linux):
+     For leak detection, Valgrind is more thorough than ASan on non-macOS.
+
+================================================================================
+11. OPEN QUESTIONS / AMBIGUITIES
+================================================================================
+
+  Q1. What should my_strcmp return for asymmetric inputs?
+      Current behavior: returns {-1, 0, 1} based on length, not character
+      values.  Is this intentional divergence from C strcmp, or a bug?
+      The README says "lexicographic," but the code does not implement that.
+      -- REQUIRES PRODUCT DECISION.
+
+  Q2. What should my_strlen return for strings >= STR_BUFFER?
+      Currently returns 0, which is indistinguishable from empty string.
+      Should it return the actual length, a special error value, or clamp?
+      -- REQUIRES DESIGN DECISION.
+
+  Q3. Should my_toupper/my_tolower handle non-ASCII (e.g., UTF-8)?
+      Currently only handles ASCII a-z / A-Z.  The font supports extended
+      characters.  Is ASCII-only scope intentional?
+      -- REQUIRES PRODUCT DECISION.
+
+  Q4. Should the min page validate that inputs are numeric?
+      Currently silently treats "hello" as 0 via atoi().  Should the UI
+      show an error, or restrict input to digits?
+      -- REQUIRES UX DECISION.
+
+  Q5. What is the target audience: portfolio demo, or reusable library?
+      This affects whether the `string` typedef, global font, and hardcoded
+      layout are acceptable trade-offs.
+      -- REQUIRES PRODUCT DECISION.
+
+  Q6. The project name appears as both "MyClab" (README) and "MyCLib"
+      (everywhere else).  Which is canonical?
+      -- REQUIRES CLARIFICATION.
+
+================================================================================
+12. PRIORITIZED ACTION PLAN (Next 1-2 Weeks)
+================================================================================
+
+Priority is ordered by severity and effort.  S = small (< 1 hour),
+M = medium (1-4 hours), L = large (> 4 hours).
+
+WEEK 1 (Must-fix and quick wins):
+
+  [1] Fix my_strcmp read-past-end UB and incorrect semantics    (HIGH, M)
+      - Rewrite loop to use min(len1, len2) as bound
+      - Return character difference for true lexicographic order
+      - Update UI labels if semantics change
+
+  [2] Check malloc returns in my_strcmp_percent                 (HIGH, S)
+      - Add NULL checks after each malloc
+      - Free partial allocations on failure
+
+  [3] Replace atoi() with strtol() in main.c                   (HIGH, S)
+      - Validate conversion, show error state in UI
+
+  [4] Fix my_strlen edge case at STR_BUFFER boundary           (HIGH, S)
+      - Change guard to `length > STR_BUFFER` or remove it
+
+  [5] Add missing #include <stddef.h> to string_utils.h        (MED, S)
+
+  [6] Add trailing newlines to all source files                 (MED, S)
+
+  [7] Fix const-correctness in string_utils function signatures (MED, S)
+
+  [8] Use size_t consistently for length variables              (MED, S)
+
+WEEK 2 (Should-fix and improvements):
+
+  [9]  Rename min() to my_min() to avoid name collision         (MED, S)
+
+  [10] Make mainFont static in ui.c                             (MED, S)
+
+  [11] Cache tolower/toupper results (dirty-flag pattern)       (MED, M)
+
+  [12] Optimize Levenshtein to two-row algorithm                (MED, M)
+
+  [13] Add unit test file with edge-case coverage               (LOW, M)
+
+  [14] Fix README typo "MyClab" -> "MyCLib"                     (LOW, S)
+
+  [15] Add -Wextra -Wsign-compare -Wconversion to CMakeLists   (MED, S)
+
+  [16] Remove unused Section enum from ui.h                     (LOW, S)
+
+================================================================================
+                              END OF REPORT
+================================================================================

@@ -17,6 +17,9 @@ main
 # OS specific
 .DS_Store
 
+# Clang analysis
+*.plist
+
 # Editor specifics
 .vscode/
 .idea/

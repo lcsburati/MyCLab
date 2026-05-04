@@ -1,0 +1,378 @@
+================================================================================
+                     MyCLib -- Current Audit Report
+================================================================================
+
+Date/time:  2026-05-04 20:32:21
+Project:    MyCLib
+Scope:      Current working tree after `my_strcmp()` refactor and UI/README sync
+Language:   English, matching the project's primary documentation
+
+================================================================================
+1. EXECUTIVE SUMMARY
+================================================================================
+
+The previous high-priority `my_strcmp()` issue has been addressed in the current
+working tree. The function now compares the first different characters and
+returns their numeric difference, using `unsigned char` casts to avoid signed
+`char` surprises. This is much closer to the expected behavior of standard
+`strcmp()`.
+
+The UI text for the `my_strcmp` screen was also updated so it no longer
+describes the result as "greater by length". It now displays the real comparison
+value returned by the function.
+
+The README files were updated in English, Portuguese, and Chinese to describe
+the new behavior. The Portuguese explanation keeps the author's learning-style
+voice while correcting the technical wording around `\0`, pointer advancement,
+and the `unsigned char` cast.
+
+Remaining project risks are now mostly outside `my_strcmp()`:
+
+- `my_strcmp_percent()` still does not check `malloc()` failures.
+- `my_strlen()` still returns `0` for multiple meanings.
+- `string_utils.h` still uses `size_t` without including `<stddef.h>`.
+- The API still uses `typedef char * string`, which prevents const-correct
+  function parameters.
+- There are still no automated tests.
+
+================================================================================
+2. VERIFICATION NOTES
+================================================================================
+
+Commands run:
+
+  cmake -S . -B /tmp/myclab_current_audit_build \
+    -DCMAKE_C_FLAGS='-Wall -Wextra -Wpedantic -Wshadow -Wconversion \
+    -Wsign-conversion -Wformat=2 -Wundef -Wstrict-prototypes \
+    -Wmissing-prototypes -Wcast-qual -Wpointer-arith -Wvla -O0 -g3'
+
+  cmake --build /tmp/myclab_current_audit_build
+
+  clang --analyze -Iinclude src/string_utils.c src/math_utils.c
+
+  ctest --test-dir /tmp/myclab_current_audit_build --output-on-failure
+
+Results:
+
+- Build: succeeded.
+- Static analyzer: no additional diagnostics for checked core files.
+- Tests: no tests were found.
+- Strict warning build: still reports warnings already known in the project.
+
+Important note:
+
+The first `ctest` attempt was started in parallel before the build directory had
+been created. It failed only because the directory did not exist yet. Running
+`ctest` again after configuration/build completed worked and reported that no
+tests are currently registered.
+
+================================================================================
+3. RESOLVED OR IMPROVED FINDINGS
+================================================================================
+
+--------------------------------------------------------------------------------
+1. `my_strcmp()` semantics are now aligned with `strcmp()` style comparison
+--------------------------------------------------------------------------------
+
+Location:
+  `src/string_utils.c` -- `my_strcmp()` -- lines 117-136
+
+Current behavior:
+
+  The function now:
+
+  - validates null pointers,
+  - compares both strings while both current characters are not `'\0'`,
+  - returns the difference between the first different characters,
+  - handles prefix cases with the final return after the loop,
+  - casts compared characters to `unsigned char` before subtraction.
+
+Why this is better:
+
+  The previous implementation compared string lengths first and returned fixed
+  values such as `1` or `-1`. The current version preserves the actual ordering
+  relationship between the first different characters.
+
+Residual note:
+
+  Returning `1` for null input is a project-specific behavior. Standard
+  `strcmp()` does not define behavior for null pointers. This is acceptable for
+  a learning project as long as the contract remains documented.
+
+Status:
+  Improved / no longer a high-priority finding.
+
+--------------------------------------------------------------------------------
+2. The UI now reflects the new `my_strcmp()` result model
+--------------------------------------------------------------------------------
+
+Location:
+  `src/ui.c` -- `RenderStrcmpPage()` -- lines 206-252
+
+Current behavior:
+
+  The UI now describes the comparison as based on the first different character.
+  It also shows the actual numeric return value, for example `S1 < S2 (-1)` or
+  `S1 > S2 (2)`, instead of assuming the result is always `1` or `-1`.
+
+Status:
+  Improved.
+
+--------------------------------------------------------------------------------
+3. README descriptions for `my_strcmp()` were updated
+--------------------------------------------------------------------------------
+
+Locations:
+  `README.md` -- `my_strcmp` section
+  `README.pt-br.md` -- `my_strcmp` section
+  `README.zh-cn.md` -- `my_strcmp` section
+
+Current behavior:
+
+  Documentation now describes:
+
+  - null input handling,
+  - loop behavior until `\0`,
+  - pointer advancement with `str1++` and `str2++`,
+  - final return for prefix cases,
+  - why `unsigned char` casts are used.
+
+Status:
+  Improved.
+
+================================================================================
+4. HIGH PRIORITY REMAINING FINDINGS
+================================================================================
+
+--------------------------------------------------------------------------------
+1. `my_strcmp_percent()` does not check allocation failures
+--------------------------------------------------------------------------------
+
+Location:
+  `src/string_utils.c` -- `my_strcmp_percent()` -- lines 156-159
+
+Problem:
+  The function allocates the Levenshtein matrix with one outer `malloc()` and
+  multiple row `malloc()` calls. None of those calls are checked for `NULL`.
+
+Impact:
+  If allocation fails, the function can dereference a null pointer. If an inner
+  row allocation fails after previous rows were allocated, cleanup is not
+  performed before the function continues.
+
+Recommended action:
+  Check the outer allocation first. Then check each row allocation. On partial
+  failure, free all rows allocated so far, free the outer pointer, and return a
+  documented error value.
+
+Priority:
+  High
+
+Estimated effort:
+  Small
+
+--------------------------------------------------------------------------------
+2. `my_strlen()` still has an ambiguous error/value contract
+--------------------------------------------------------------------------------
+
+Location:
+  `src/string_utils.c` -- `my_strlen()` -- lines 10-29
+
+Problem:
+  The function returns `0` for:
+
+  - `NULL`,
+  - an empty string,
+  - strings that hit the `STR_BUFFER` guard.
+
+Impact:
+  Callers cannot distinguish a valid empty string from an invalid input or limit
+  failure. This ambiguity propagates into other string functions.
+
+Recommended action:
+  Decide whether `my_strlen()` should mimic standard `strlen()` or be a custom
+  bounded helper. If it stays bounded, use a contract that separates success
+  from error.
+
+Priority:
+  High
+
+Estimated effort:
+  Small to Medium
+
+================================================================================
+5. MEDIUM PRIORITY REMAINING FINDINGS
+================================================================================
+
+--------------------------------------------------------------------------------
+3. `string_utils.h` is not self-contained
+--------------------------------------------------------------------------------
+
+Location:
+  `include/string_utils.h` -- line 14
+
+Problem:
+  The header declares `size_t my_strlen(...)`, but it does not include
+  `<stddef.h>`.
+
+Impact:
+  Files that include only `string_utils.h` may fail depending on include order.
+
+Recommended action:
+  Add `#include <stddef.h>` to the header.
+
+Priority:
+  Medium
+
+Estimated effort:
+  Small
+
+--------------------------------------------------------------------------------
+4. String utility parameters are not const-correct
+--------------------------------------------------------------------------------
+
+Location:
+  `include/string_utils.h` -- lines 11-18
+  `src/string_utils.c` -- string utility function signatures
+
+Problem:
+  The `string` typedef is `char *`, so read-only functions appear to accept
+  mutable strings.
+
+Impact:
+  This creates warnings when callers pass `const char *` and weakens the API
+  contract.
+
+Recommended action:
+  Use `const char *` for inputs that are only read. Keep returned buffers from
+  `my_toupper()` and `my_tolower()` as mutable heap-allocated strings.
+
+Priority:
+  Medium
+
+Estimated effort:
+  Small
+
+--------------------------------------------------------------------------------
+5. Levenshtein loops mix `int` indexes with `size_t` lengths
+--------------------------------------------------------------------------------
+
+Location:
+  `src/string_utils.c` -- `my_strcmp_percent()` -- lines 157-188
+
+Problem:
+  `str1_length` and `str2_length` are `size_t`, but loop counters are `int`.
+  `max_len` is also stored as `int`.
+
+Impact:
+  Strict builds report signed/unsigned comparison warnings and possible
+  precision loss.
+
+Recommended action:
+  Use `size_t` for lengths and matrix indexes. Keep matrix cell values as `int`
+  if edit distance is intentionally represented that way.
+
+Priority:
+  Medium
+
+Estimated effort:
+  Small
+
+================================================================================
+6. LOW PRIORITY REMAINING FINDINGS
+================================================================================
+
+--------------------------------------------------------------------------------
+6. No automated tests are registered
+--------------------------------------------------------------------------------
+
+Location:
+  `CMakeLists.txt`
+
+Problem:
+  `ctest` reports no tests.
+
+Impact:
+  The recent `my_strcmp()` fix is not protected by regression tests.
+
+Recommended action:
+  Add a small test executable for core utilities and register it with CTest.
+  Include direct tests for:
+
+  - equal strings,
+  - first string less than second,
+  - first string greater than second,
+  - prefix cases such as `"ab"` vs `"abc"`,
+  - empty string cases,
+  - null handling if the project keeps that behavior.
+
+Priority:
+  Low to Medium
+
+Estimated effort:
+  Medium
+
+--------------------------------------------------------------------------------
+7. Missing final newlines still create warning noise
+--------------------------------------------------------------------------------
+
+Locations:
+  `include/string_utils.h`
+  `include/math_utils.h`
+  `src/string_utils.c`
+  `src/math_utils.c`
+
+Problem:
+  Strict builds warn about missing newlines at end of file.
+
+Impact:
+  Low functional risk, but avoidable warning noise.
+
+Recommended action:
+  Add final newlines to these files.
+
+Priority:
+  Low
+
+Estimated effort:
+  Small
+
+================================================================================
+7. RECOMMENDED NEXT ORDER
+================================================================================
+
+1. Add focused tests for `my_strcmp()` now that its behavior is corrected.
+
+2. Fix allocation failure handling in `my_strcmp_percent()`.
+
+3. Decide and document the intended `my_strlen()` contract.
+
+4. Add `<stddef.h>` to `string_utils.h`.
+
+5. Improve const-correctness in the string utility API.
+
+6. Replace Levenshtein loop indexes with `size_t` where appropriate.
+
+7. Add final newlines to remove low-signal warnings.
+
+================================================================================
+8. AUDIT FILE ORDERING
+================================================================================
+
+New audit files should use this naming pattern:
+
+  YYYY-MM-DD_HH-MM-SS_short-description.txt
+
+This keeps reports naturally sorted by date and time in file listings.
+
+This report follows that pattern:
+
+  `2026-05-04_20-32-21_current_audit_report.txt`
+
+================================================================================
+9. FINAL NOTE
+================================================================================
+
+The important progress in this snapshot is that `my_strcmp()` is no longer the
+main risk. The next useful move is to protect it with tests, then continue with
+the memory-safety issue in `my_strcmp_percent()`.

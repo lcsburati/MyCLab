@@ -108,19 +108,15 @@ Assim como nas outras funções, mantemos a segurança verificando o sucesso da 
 <details>
 <summary><strong>my_strcmp</strong> (clique para expandir)</summary>
 
-Os parâmetros de input são as duas strings a serem comparadas, e o retorno é um `int` variante ao resultado da comparação: se forem diferentes e a primeira string for maior, retorna 1; se forem diferentes e a primeira string for menor, retorna -1; e se forem iguais, retorna 0.
+Os parâmetros de input são duas strings que serão comparadas, `str1` e `str2`. A ideia aqui é simular o comportamento da função `strcmp`: se as duas strings forem iguais, o retorno é `0`; se forem diferentes, o retorno vem da diferença entre o primeiro caractere diferente encontrado.
 
-Aqui, o objetivo é comparar duas strings e retornar o resultado da comparação.
+Primeiro validamos se alguma das entradas é nula. Caso `str1` ou `str2` seja `NULL`, a função retorna `1`, indicando que a comparação não é igual.
 
-Começamos definindo duas variáveis que irão indicar o tamanho das duas strings.
+Depois começa o processamento principal: enquanto nenhuma das duas strings chegou no caractere nulo `\0`, o loop continua válido. Dentro desse loop, comparamos o caractere atual de `str1` com o caractere atual de `str2`. Se eles forem diferentes, a função já retorna a diferença entre esses dois caracteres. Se forem iguais, avançamos os dois ponteiros com `str1++` e `str2++`, indo para o próximo caractere das duas strings.
 
-A partir disso, fazemos um `if` para verificar qual string é maior. Se for a primeira string, percorremos ela com um `while` (já que estamos trabalhando com ponteiros). Neste `while`, comparamos se `*str1 != *str2`. Se for verdadeiro, retornamos 1; caso contrário, percorremos toda a string e, se forem iguais, a condição não é satisfeita e retornamos 0.
+Quando o loop acaba, fazemos mais um retorno com a diferença entre os caracteres atuais. Isso cobre o caso em que uma string termina antes da outra, por exemplo `"abc"` e `"ab"`: nesse ponto a comparação fica entre `'c'` e `'\0'`.
 
-A mesma lógica é aplicada em um `else if` caso a segunda string seja maior, retornando -1.
-
-Agora caso elas sejam de mesmo tamanho, utilizamos a str1 para percorrer a string e comparar com a str2. Se forem diferentes, retornamos 1; caso contrário, percorremos toda a string e, se forem iguais, a condição não é satisfeita e retornamos 0.
-
-**Verificação de entrada vazia:** A função verifica se alguma das strings tem tamanho 0. Se uma ou ambas forem vazias, retorna 1, indicando que são diferentes — isso cobre casos onde pelo menos uma entrada é inválida ou vazia.
+Foi usado type cast para `unsigned char` nos retornos porque estamos tratando `char` dentro de uma operação com inteiros. Dependendo do compilador, `char` pode ser interpretado como signed ou unsigned, e isso pode dar diferença principalmente com caracteres fora da tabela ASCII básica. Convertendo para `unsigned char`, a comparação fica mais previsível e mais próxima do comportamento esperado de `strcmp`.
 
 </details>
 

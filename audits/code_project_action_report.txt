@@ -1,0 +1,379 @@
+================================================================================
+                         MyCLib -- Project Action Report
+================================================================================
+
+Date:       2026-05-04
+Project:    MyCLib
+Scope:      Read-only project audit and prioritized action plan
+Language:   English, matching the project's primary documentation
+
+================================================================================
+1. EXECUTIVE SUMMARY
+================================================================================
+
+MyCLib builds successfully and has a clear educational purpose: reimplementing
+selected C utilities to understand low-level behavior. The project is small and
+approachable, which makes it a good candidate for quick quality improvements.
+
+The main risks are not in the build system, but in the behavioral contracts of
+the core functions. The highest-priority work is to correct string comparison
+semantics, make allocation failures safe, validate numeric input, and add tests
+that lock those decisions down.
+
+Top risks:
+- `my_strcmp()` does not behave like standard `strcmp()` and can produce
+  misleading lexicographic results.
+- `my_strcmp_percent()` allocates a Levenshtein matrix without checking whether
+  `malloc()` succeeded.
+- The UI calls `atoi()` on free-form user input, which silently accepts invalid
+  input and can overflow.
+- `my_strlen()` uses `0` for both "empty string" and "invalid/too long string",
+  which makes downstream behavior ambiguous.
+- There is no automated test suite, so regressions in the core educational
+  functions are easy to miss.
+
+================================================================================
+2. VERIFICATION NOTES
+================================================================================
+
+Commands used or confirmed during this audit:
+
+  cmake -S . -B /tmp/myclab_audit_build \
+    -DCMAKE_C_FLAGS='-Wall -Wextra -Wpedantic -Wshadow -Wconversion \
+    -Wsign-conversion -Wformat=2 -Wundef -Wstrict-prototypes \
+    -Wmissing-prototypes -Wcast-qual -Wpointer-arith -Wvla -O0 -g3'
+
+  cmake --build /tmp/myclab_audit_build
+
+  clang --analyze -Iinclude src/string_utils.c src/math_utils.c
+
+  ctest --test-dir /tmp/myclab_audit_build --output-on-failure
+
+Observed results:
+- The project builds successfully.
+- The strict warning build reports 25 warnings.
+- `clang --analyze` did not report additional issues for the checked core files.
+- `ctest` reports: "No tests were found!!!"
+- `cppcheck` and `clang-tidy` were not available in the current environment.
+
+Warning categories observed:
+- Missing newline at end of file.
+- `size_t` to `int` precision loss.
+- Signed/unsigned comparisons.
+- Passing `const char *` into APIs declared as mutable `char *`.
+
+================================================================================
+3. PRIORITY ACTION PLAN
+================================================================================
+
+--------------------------------------------------------------------------------
+P0 -- Fix correctness and safety issues first
+--------------------------------------------------------------------------------
+
+1. Fix `my_strcmp()` semantics and bounds behavior
+
+Location:
+  `src/string_utils.c` -- `my_strcmp()` -- lines 117-171
+
+Problem:
+  The function currently compares string lengths before comparing content. When
+  both strings have the same length and differ, it always returns `1`, so it
+  cannot represent lexicographic ordering correctly. For example, `"b"` compared
+  with `"c"` should return a negative result if the goal is to mimic `strcmp()`.
+
+  In the branches where one string is longer than the other, the loop walks the
+  longer string while still dereferencing the shorter one, which can read past
+  the shorter string's null terminator.
+
+Impact:
+  Incorrect learning model for `strcmp()`, misleading UI output, and potential
+  undefined behavior.
+
+Recommended action:
+  Decide whether `my_strcmp()` is intended to match standard `strcmp()`. If yes,
+  compare character by character until the first difference or until one string
+  ends, then return the difference between the first differing characters.
+
+Estimated effort:
+  Medium
+
+--------------------------------------------------------------------------------
+
+2. Check every allocation in `my_strcmp_percent()`
+
+Location:
+  `src/string_utils.c` -- `my_strcmp_percent()` -- lines 190-193
+
+Problem:
+  The outer matrix allocation and each row allocation are not checked for
+  `NULL`. If allocation fails, the function can dereference a null pointer. If a
+  later row allocation fails after earlier rows succeeded, the already allocated
+  rows can leak.
+
+Impact:
+  Crash or undefined behavior under memory pressure.
+
+Recommended action:
+  Check the outer `malloc()` result. Then check each row allocation. If any row
+  allocation fails, free all previously allocated rows and the outer matrix
+  before returning a documented error value.
+
+Estimated effort:
+  Small
+
+--------------------------------------------------------------------------------
+
+3. Replace `atoi()` with validated parsing
+
+Location:
+  `src/main.c` -- `main()` -- line 66
+
+Problem:
+  The UI passes arbitrary text input to `atoi()`. Invalid input such as `"abc"`
+  becomes `0` silently, and overflow/underflow is not safely handled.
+
+Impact:
+  Incorrect UI results and unsafe numeric parsing.
+
+Recommended action:
+  Replace `atoi()` with `strtol()` and validate `errno`, `endptr`, and range.
+  Alternatively, restrict the `min` screen input so it only accepts valid integer
+  text before conversion.
+
+Estimated effort:
+  Small
+
+--------------------------------------------------------------------------------
+
+4. Define a clear contract for empty and oversized strings
+
+Location:
+  `src/string_utils.c` -- `my_strlen()` -- lines 10-29
+  `src/string_utils.c` -- `my_strcmp_percent()` -- lines 184-187
+
+Problem:
+  `my_strlen()` returns `0` for `NULL`, for empty strings, and when the internal
+  `STR_BUFFER` guard is exceeded. This means callers cannot distinguish a valid
+  empty string from an error or limit condition.
+
+  `my_strcmp_percent()` also returns `1` for empty input, while the UI treats two
+  empty inputs as 100 percent similarity.
+
+Impact:
+  Ambiguous behavior and inconsistent documentation/UI expectations.
+
+Recommended action:
+  Choose explicit behavior for each case:
+  - `NULL`
+  - empty string
+  - string longer than the UI buffer
+  - two empty strings in similarity comparison
+
+  Then document that behavior and update callers accordingly.
+
+Estimated effort:
+  Small to Medium
+
+================================================================================
+4. MEDIUM PRIORITY IMPROVEMENTS
+================================================================================
+
+5. Make `string_utils.h` self-contained
+
+Location:
+  `include/string_utils.h` -- line 14
+
+Problem:
+  The header declares a function returning `size_t`, but it does not include
+  `<stddef.h>`. The header only compiles when another file happens to include a
+  header that defines `size_t` first.
+
+Recommended action:
+  Add `#include <stddef.h>` to `string_utils.h`.
+
+Estimated effort:
+  Small
+
+--------------------------------------------------------------------------------
+
+6. Improve const-correctness
+
+Location:
+  `include/string_utils.h` -- lines 14-18
+  `src/ui.c` -- lines 219-220
+
+Problem:
+  The `string` typedef is `char *`, so read-only functions appear to accept
+  mutable strings. This causes warnings when passing `const char *` values from
+  the UI.
+
+Recommended action:
+  Use `const char *` for inputs that are only read. Keep mutable `char *` only
+  where the function actually writes to the buffer.
+
+Estimated effort:
+  Small
+
+--------------------------------------------------------------------------------
+
+7. Use `size_t` consistently for lengths and indexes
+
+Location:
+  `src/main.c` -- line 58
+  `src/ui.c` -- lines 219-220
+  `src/string_utils.c` -- lines 191-222
+
+Problem:
+  String lengths are returned as `size_t`, but several call sites store them in
+  `int`. The Levenshtein loops also compare `int` loop counters against
+  `size_t` lengths.
+
+Impact:
+  Warning noise and possible truncation on large values.
+
+Recommended action:
+  Use `size_t` for lengths and loop indexes. Convert to `int` only at UI
+  boundaries if a Raylib or formatting API requires it.
+
+Estimated effort:
+  Small
+
+--------------------------------------------------------------------------------
+
+8. Avoid heap allocation inside the render loop
+
+Location:
+  `src/main.c` -- lines 39-48
+
+Problem:
+  `my_tolower()` and `my_toupper()` allocate a new string every frame while
+  their screens are active, then immediately free it.
+
+Impact:
+  Unnecessary heap churn at 60 FPS.
+
+Recommended action:
+  Recalculate converted strings only when the input changes, or provide
+  buffer-based variants for UI usage.
+
+Estimated effort:
+  Medium
+
+================================================================================
+5. LOW PRIORITY IMPROVEMENTS
+================================================================================
+
+9. Add automated tests
+
+Location:
+  `CMakeLists.txt`
+  New test source files
+
+Problem:
+  `ctest` reports no tests. The project has several functions where edge cases
+  matter, but no automated regression coverage.
+
+Recommended action:
+  Add a small C test executable and register it with CTest. Start with:
+  - `my_strlen(NULL)`
+  - `my_strlen("")`
+  - `my_strlen("abc")`
+  - `my_toupper("aB1")`
+  - `my_tolower("Ab1")`
+  - `my_strcmp("a", "b")`
+  - `my_strcmp("b", "a")`
+  - `my_strcmp("abc", "abc")`
+  - `my_strcmp_percent("kitten", "sitting")`
+  - `min(3, 1, 2)`
+
+Estimated effort:
+  Medium
+
+--------------------------------------------------------------------------------
+
+10. Align documentation with actual behavior
+
+Location:
+  `README.md`
+  `README.pt-br.md`
+  `README.zh-cn.md`
+  `ai/pkm/*.md`
+
+Problem:
+  Some behavior described in documentation does not fully match the current
+  implementation, especially around empty inputs, similarity percentage, and the
+  exact meaning of `my_strcmp()` results.
+
+Recommended action:
+  After fixing the core function contracts, update documentation in all
+  maintained languages.
+
+Estimated effort:
+  Medium
+
+--------------------------------------------------------------------------------
+
+11. Keep project naming consistent
+
+Location:
+  `README.md` -- line 1
+  `CMakeLists.txt` -- project name
+  `src/ui.c` -- window title
+
+Problem:
+  The documentation uses `MyClab`, while the build and UI use `MyCLib`.
+
+Recommended action:
+  Pick one canonical name and apply it consistently.
+
+Estimated effort:
+  Small
+
+================================================================================
+6. RECOMMENDED ORDER FOR THE NEXT 1-2 WEEKS
+================================================================================
+
+1. Write tests that capture the desired behavior of `my_strcmp()`,
+   `my_strlen()`, and `my_strcmp_percent()`.
+
+2. Fix `my_strcmp()` and run the new tests.
+
+3. Fix allocation handling in `my_strcmp_percent()`.
+
+4. Replace `atoi()` with validated parsing or restrict numeric input.
+
+5. Make `string_utils.h` self-contained and const-correct.
+
+6. Replace length-related `int` variables with `size_t` where appropriate.
+
+7. Optimize `toupper`/`tolower` rendering so conversion is not allocated every
+   frame.
+
+8. Update README files and PKM notes after the behavior is settled.
+
+================================================================================
+7. TOOLING RECOMMENDATIONS
+================================================================================
+
+Add or regularly run:
+
+  clang --analyze -std=c99 -Iinclude src/string_utils.c src/math_utils.c
+
+  cppcheck --enable=all --std=c99 --suppress=missingIncludeSystem src include
+
+  cmake --build build
+
+  ctest --test-dir build --output-on-failure
+
+Consider adding stricter warnings to debug or CI builds:
+
+  -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Wshadow
+  -Wformat=2 -Wstrict-prototypes -Wmissing-prototypes -Wpointer-arith
+
+================================================================================
+8. FINAL NOTE
+================================================================================
+
+The Raylib UI is documented as AI-generated. This report treats it as part of
+the project surface, but the most important fixes are in the manually written
+core logic and in the contract between that logic, the UI, and the README.

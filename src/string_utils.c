@@ -121,54 +121,20 @@ int my_strcmp(string str1, string str2)
         return 1;
     }
 
-    size_t str1_length = my_strlen(str1);
-    size_t str2_length = my_strlen(str2);
-
-    if (str1_length == 0 || str2_length == 0)
+    while (*str1 && *str2)
     {
-        return 1;
-    }
-
-    if (str1_length > str2_length)
-    {
-        while (*str1)
+        if (*str1 != *str2)
         {
-            if (*str1 != *str2)
-            {
-                return 1;
-            }
-            str1++; str2++;
-        }
-    }
-    else if (str1_length < str2_length)
-    {
-        while (*str2)
-        {
-            if (*str2 != *str1)
-            {
-                return -1;
-            }
-            str1++; str2++;
-        }
-    }
-
-    else if (str1_length == str2_length)
-    {
-        while (*str1)
-        {
-            if (*str1 != *str2)
-            {
-                return 1;
-            }
-            str1++; str2++;
+            return (unsigned char)*str1 - (unsigned char)*str2;
         }
 
+        str1++;
+        str2++;
     }
-    
-    return 0;
 
-
+    return (unsigned char)*str1 - (unsigned char)*str2;
 }
+
 
 double my_strcmp_percent(string str1, string str2)
 {

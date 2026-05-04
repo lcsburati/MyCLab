@@ -1,0 +1,490 @@
+================================================================================
+                    MyCLib -- Core Logic Action Report
+================================================================================
+
+Date:       2026-05-04
+Project:    MyCLib
+Scope:      Manually written core logic only
+Language:   English, matching the project's primary documentation
+
+================================================================================
+1. SCOPE CLARIFICATION
+================================================================================
+
+This report intentionally excludes the AI-generated UI layer:
+
+- `src/ui.c`
+- `include/ui.h`
+- `src/main.c`
+
+Those files are part of the runnable application, but they are not treated as
+manual project debt in this report. Any issue located only in the AI-generated
+UI layer should be handled separately as UI integration work, not as a finding
+against the core C library implementation.
+
+Reviewed core files:
+
+- `src/string_utils.c`
+- `include/string_utils.h`
+- `src/math_utils.c`
+- `include/math_utils.h`
+- `CMakeLists.txt`
+- README and project documentation, only where they describe core behavior
+
+================================================================================
+2. EXECUTIVE SUMMARY
+================================================================================
+
+The manually written core logic is compact and useful for learning C concepts,
+but several function contracts need to be tightened before the library can be
+considered reliable.
+
+The most important work is in `string_utils`: `my_strcmp()` needs corrected
+comparison semantics, `my_strcmp_percent()` needs allocation failure handling,
+and the behavior of empty, null, and oversized strings should be made explicit.
+
+Top core risks:
+
+- `my_strcmp()` does not currently match standard `strcmp()` behavior.
+- `my_strcmp()` can read beyond the shorter string in some length-mismatch
+  cases.
+- `my_strcmp_percent()` does not check `malloc()` failures.
+- `my_strlen()` returns `0` for multiple meanings: null input, empty string, and
+  internal limit failure.
+- The public header `string_utils.h` is not self-contained because it uses
+  `size_t` without including `<stddef.h>`.
+
+================================================================================
+3. VERIFICATION NOTES
+================================================================================
+
+Commands used or confirmed during the audit:
+
+  cmake -S . -B /tmp/myclab_audit_build \
+    -DCMAKE_C_FLAGS='-Wall -Wextra -Wpedantic -Wshadow -Wconversion \
+    -Wsign-conversion -Wformat=2 -Wundef -Wstrict-prototypes \
+    -Wmissing-prototypes -Wcast-qual -Wpointer-arith -Wvla -O0 -g3'
+
+  cmake --build /tmp/myclab_audit_build
+
+  clang --analyze -Iinclude src/string_utils.c src/math_utils.c
+
+  ctest --test-dir /tmp/myclab_audit_build --output-on-failure
+
+Observed results:
+
+- The project builds successfully.
+- Strict warning builds report warnings, including several from the AI UI layer.
+- In the core files, the most relevant warnings are signed/unsigned comparisons,
+  `size_t` to `int` conversions in the Levenshtein implementation, and missing
+  newlines at end of file.
+- `clang --analyze` did not report additional issues for the checked core files.
+- `ctest` reports: "No tests were found!!!"
+- `cppcheck` and `clang-tidy` were not available in the current environment.
+
+================================================================================
+4. HIGH PRIORITY CORE FINDINGS
+================================================================================
+
+--------------------------------------------------------------------------------
+1. Fix `my_strcmp()` semantics
+--------------------------------------------------------------------------------
+
+Location:
+  `src/string_utils.c` -- `my_strcmp()` -- lines 117-171
+
+Problem:
+  The implementation decides comparison results largely from string length, then
+  from equality checks. This does not match standard `strcmp()` behavior.
+
+  When strings have the same length and different characters, the function
+  always returns `1`. That means these two calls can both report the same sign:
+
+  - `my_strcmp("b", "c")`
+  - `my_strcmp("c", "b")`
+
+  If the educational goal is to simulate `strcmp()`, this is incorrect because
+  the sign should come from the first differing character.
+
+Impact:
+  Incorrect comparison results and an inaccurate learning model for how C string
+  comparison works.
+
+Recommendation:
+  Compare both strings character by character until either:
+
+  - a different character is found, or
+  - one string reaches `'\0'`.
+
+  Then return the difference between the compared characters, cast safely to
+  `unsigned char` if the function is meant to follow the standard library model.
+
+Estimated effort:
+  Medium
+
+Confidence:
+  High
+
+--------------------------------------------------------------------------------
+2. Prevent out-of-bounds reads in `my_strcmp()`
+--------------------------------------------------------------------------------
+
+Location:
+  `src/string_utils.c` -- `my_strcmp()` -- lines 132-152
+
+Problem:
+  In the branch where `str1` is longer, the loop condition is `while (*str1)`,
+  but the body still dereferences `str2`. Once `str2` reaches its null
+  terminator, later iterations can keep reading past the valid end of `str2`.
+
+  The symmetric branch has the same issue when `str2` is longer than `str1`.
+
+Impact:
+  Undefined behavior risk.
+
+Recommendation:
+  Do not loop over the longer string while dereferencing the shorter one. A
+  standard `strcmp()` style loop naturally avoids this because it advances both
+  pointers only while both current characters are equal and non-null.
+
+Estimated effort:
+  Small to Medium
+
+Confidence:
+  High
+
+--------------------------------------------------------------------------------
+3. Check allocation failures in `my_strcmp_percent()`
+--------------------------------------------------------------------------------
+
+Location:
+  `src/string_utils.c` -- `my_strcmp_percent()` -- lines 190-193
+
+Problem:
+  The function allocates a matrix with one outer `malloc()` and multiple row
+  `malloc()` calls. None of those allocations are checked for `NULL`.
+
+Impact:
+  If allocation fails, the function can dereference a null pointer. If an inner
+  allocation fails after earlier rows were allocated, the already allocated rows
+  can leak unless cleanup is handled.
+
+Recommendation:
+  Check every allocation. If the outer allocation fails, return a documented
+  error value. If a row allocation fails, free all previously allocated rows,
+  free the outer matrix, and return the same documented error value.
+
+Estimated effort:
+  Small
+
+Confidence:
+  High
+
+--------------------------------------------------------------------------------
+4. Define the `my_strlen()` error contract
+--------------------------------------------------------------------------------
+
+Location:
+  `src/string_utils.c` -- `my_strlen()` -- lines 10-29
+
+Problem:
+  `my_strlen()` returns `0` for null input and for an empty string. It also
+  returns `0` when the internal `STR_BUFFER` guard is exceeded.
+
+Impact:
+  Callers cannot distinguish:
+
+  - null input,
+  - valid empty input,
+  - string too long,
+  - possible guard failure.
+
+  This ambiguity propagates into `my_toupper()`, `my_tolower()`, `my_strcmp()`,
+  and `my_strcmp_percent()`.
+
+Recommendation:
+  Decide whether `my_strlen()` should behave like standard `strlen()` or like a
+  safer project-specific helper.
+
+  If the goal is to mimic `strlen()`, it should not silently return `0` for
+  oversized strings. If the goal is safety, use a separate bounded function name
+  and return a distinct error signal.
+
+Estimated effort:
+  Small to Medium
+
+Confidence:
+  High
+
+================================================================================
+5. MEDIUM PRIORITY CORE FINDINGS
+================================================================================
+
+--------------------------------------------------------------------------------
+5. Make `string_utils.h` self-contained
+--------------------------------------------------------------------------------
+
+Location:
+  `include/string_utils.h` -- line 14
+
+Problem:
+  The header declares `size_t my_strlen(...)`, but does not include
+  `<stddef.h>`, where `size_t` is defined.
+
+Impact:
+  The header depends on include order. A file that includes only
+  `string_utils.h` can fail to compile.
+
+Recommendation:
+  Add `#include <stddef.h>` to `include/string_utils.h`.
+
+Estimated effort:
+  Small
+
+Confidence:
+  High
+
+--------------------------------------------------------------------------------
+6. Improve const-correctness in the public API
+--------------------------------------------------------------------------------
+
+Location:
+  `include/string_utils.h` -- lines 11-18
+  `src/string_utils.c` -- function parameters
+
+Problem:
+  The typedef `string` is `char *`, so every string function appears to accept
+  mutable input. However, most functions only read from their input strings.
+
+Impact:
+  The API communicates more mutability than it needs. It also makes it harder to
+  use the functions from const-correct code.
+
+Recommendation:
+  Prefer explicit `const char *` parameters for functions that only read input:
+
+  - `my_strlen`
+  - `my_toupper`
+  - `my_tolower`
+  - `my_strcmp`
+  - `my_strcmp_percent`
+
+  Keep the return type of `my_toupper()` and `my_tolower()` as mutable
+  heap-allocated `char *`, since callers own and may free the returned buffer.
+
+Estimated effort:
+  Small
+
+Confidence:
+  High
+
+--------------------------------------------------------------------------------
+7. Use `size_t` consistently in the Levenshtein implementation
+--------------------------------------------------------------------------------
+
+Location:
+  `src/string_utils.c` -- `my_strcmp_percent()` -- lines 191-222
+
+Problem:
+  The function stores string lengths in `size_t`, but uses `int` loop counters
+  and stores `max_len` as `int`.
+
+Impact:
+  This creates signed/unsigned comparison warnings and possible truncation if
+  the function is ever used with strings larger than `INT_MAX`.
+
+Recommendation:
+  Use `size_t` for string lengths and matrix indexes. Convert to `int` only for
+  matrix cell values if the edit distance is intentionally represented as an
+  `int`.
+
+Estimated effort:
+  Small
+
+Confidence:
+  High
+
+--------------------------------------------------------------------------------
+8. Clarify empty-string behavior for `my_strcmp_percent()`
+--------------------------------------------------------------------------------
+
+Location:
+  `src/string_utils.c` -- `my_strcmp_percent()` -- lines 184-187
+
+Problem:
+  The function returns `1` when either string length is `0`.
+
+Impact:
+  This is ambiguous because the function returns a percentage-like `double`.
+  A return value of `1` could mean 1 percent, 100 percent, or an error sentinel
+  depending on interpretation.
+
+Recommendation:
+  Define explicit behavior:
+
+  - both strings empty: probably `100.0`
+  - one string empty: probably `0.0`
+  - invalid input: documented error value or separate status mechanism
+
+Estimated effort:
+  Small
+
+Confidence:
+  High
+
+================================================================================
+6. LOW PRIORITY CORE FINDINGS
+================================================================================
+
+--------------------------------------------------------------------------------
+9. Add automated tests for core functions
+--------------------------------------------------------------------------------
+
+Location:
+  `CMakeLists.txt`
+  new test files
+
+Problem:
+  `ctest` reports no tests.
+
+Impact:
+  Behavior changes in the core learning functions cannot be verified
+  automatically.
+
+Recommendation:
+  Add a small C test executable and register it with CTest. Start with tests for:
+
+  - `my_strlen(NULL)`
+  - `my_strlen("")`
+  - `my_strlen("abc")`
+  - `my_toupper("aB1")`
+  - `my_tolower("Ab1")`
+  - `my_strcmp("a", "b")`
+  - `my_strcmp("b", "a")`
+  - `my_strcmp("abc", "abc")`
+  - `my_strcmp_percent("", "")`
+  - `my_strcmp_percent("a", "")`
+  - `my_strcmp_percent("kitten", "sitting")`
+  - `min(3, 1, 2)`
+
+Estimated effort:
+  Medium
+
+Confidence:
+  High
+
+--------------------------------------------------------------------------------
+10. Reduce duplicate conversion logic
+--------------------------------------------------------------------------------
+
+Location:
+  `src/string_utils.c` -- `my_toupper()` -- lines 32-71
+  `src/string_utils.c` -- `my_tolower()` -- lines 73-115
+
+Problem:
+  `my_toupper()` and `my_tolower()` share similar allocation, traversal, and
+  copy logic.
+
+Impact:
+  Small maintainability cost. Fixes to allocation or traversal behavior may need
+  to be repeated in both functions.
+
+Recommendation:
+  After correctness fixes and tests are in place, consider extracting a small
+  internal helper for allocation and character transformation.
+
+Estimated effort:
+  Small
+
+Confidence:
+  Medium
+
+--------------------------------------------------------------------------------
+11. Add final newlines to source/header files
+--------------------------------------------------------------------------------
+
+Location:
+  `include/string_utils.h`
+  `include/math_utils.h`
+  `src/string_utils.c`
+  `src/math_utils.c`
+
+Problem:
+  Strict compiler warnings report missing newlines at end of file.
+
+Impact:
+  Low functional risk, but avoidable warning noise.
+
+Recommendation:
+  Add a final newline to each file.
+
+Estimated effort:
+  Small
+
+Confidence:
+  High
+
+================================================================================
+7. DOCUMENTATION TASKS
+================================================================================
+
+After the core behavior is fixed, update documentation so it reflects the real
+function contracts.
+
+Recommended documentation updates:
+
+- Explain whether `my_strcmp()` is intended to mimic standard `strcmp()`.
+- Document ownership for strings returned by `my_toupper()` and `my_tolower()`.
+- Document how null input and empty input are handled.
+- Document `my_strcmp_percent()` return values for empty strings and invalid
+  input.
+- Keep the AI-generated UI note, but clearly separate UI authorship from the
+  manually written core logic.
+
+================================================================================
+8. RECOMMENDED ORDER OF WORK
+================================================================================
+
+1. Add core tests first, even if some initially fail.
+
+2. Fix `my_strcmp()` semantics and bounds behavior.
+
+3. Define and implement clear empty/null/oversized-string behavior.
+
+4. Add allocation checks and cleanup to `my_strcmp_percent()`.
+
+5. Make `string_utils.h` self-contained with `<stddef.h>`.
+
+6. Improve const-correctness across the string utility API.
+
+7. Replace signed loop counters with `size_t` where they represent lengths or
+   indexes.
+
+8. Update README files and PKM notes after behavior is stable.
+
+================================================================================
+9. TOOLING RECOMMENDATIONS
+================================================================================
+
+Recommended local checks:
+
+  clang --analyze -std=c99 -Iinclude src/string_utils.c src/math_utils.c
+
+  cppcheck --enable=all --std=c99 --suppress=missingIncludeSystem src include
+
+  cmake --build build
+
+  ctest --test-dir build --output-on-failure
+
+Recommended strict warning flags for debug or CI builds:
+
+  -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Wshadow
+  -Wformat=2 -Wstrict-prototypes -Wmissing-prototypes -Wpointer-arith
+
+================================================================================
+10. FINAL NOTE
+================================================================================
+
+The AI-generated UI layer can still be improved, but it should be tracked as a
+separate integration/UI task. The core project work should focus first on the
+manual library functions, their public contracts, and automated tests.

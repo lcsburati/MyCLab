@@ -204,7 +204,7 @@ void RenderToUpperPage(const char *input, int *activeField, const char *result) 
 }
 
 void RenderStrcmpPage(const char *i1, const char *i2, int *activeField, int cmpResult) {
-    PageHeader("my_strcmp", "Compare two strings lexicographically", ACCENT);
+    PageHeader("my_strcmp", "Compare by the first different character", ACCENT);
     DrawTextEx(mainFont, "String 1", (Vector2){ (float)CONTENT_X, 100 }, FONT_SIZE_XS, 1, TEXT_SECONDARY);
     Rectangle f1 = { CONTENT_X, 118, CONTENT_W, INPUT_H };
     DrawInputField(f1, i1, "First string...", *activeField == 1);
@@ -230,7 +230,7 @@ void RenderStrcmpPage(const char *i1, const char *i2, int *activeField, int cmpR
     } else if (oneEmpty) {
         const char *sizeLabel = empty1 ? "S1 EMPTY" : "S2 EMPTY";
         DrawTextEx(mainFont, TextFormat("Length: S1=%d | S2=%d | %s", len1, len2, sizeLabel), (Vector2){ (float)CONTENT_X, 280 }, FONT_SIZE_XS, 1, RED_ERR);
-        DrawResultCard("Comparison Result", empty1 ? "S2 GREATER (1)" : "S1 GREATER (1)", 308, RED_ERR);
+        DrawResultCard("Comparison Result", TextFormat("%s (%d)", empty1 ? "S1 < S2" : "S1 > S2", cmpResult), 308, RED_ERR);
     } else {
         const char *sizeLabel = sameLen ? "SAME SIZE" : "DIFFERENT SIZES";
         DrawTextEx(mainFont, TextFormat("Length: S1=%d | S2=%d | %s", len1, len2, sizeLabel), (Vector2){ (float)CONTENT_X, 280 }, FONT_SIZE_XS, 1, sameLen ? ORANGE_WARN : TEXT_MUTED);
@@ -241,10 +241,10 @@ void RenderStrcmpPage(const char *i1, const char *i2, int *activeField, int cmpR
             msg = "EQUAL (0)";
             col = GREEN_OK;
         } else if (cmpResult > 0) {
-            msg = sameLen ? "DIFFERENT - S1 > S2 (1)" : "S1 GREATER LENGTH (1)";
+            msg = TextFormat("S1 > S2 (%d)", cmpResult);
             col = RED_ERR;
         } else {
-            msg = "S1 < S2 (-1)";
+            msg = TextFormat("S1 < S2 (%d)", cmpResult);
             col = ORANGE_WARN;
         }
         DrawResultCard("Comparison Result", msg, 308, col);

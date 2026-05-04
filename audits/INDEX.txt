@@ -1,0 +1,23 @@
+================================================================================
+                           MyCLib -- Audit Index
+================================================================================
+
+Reports ordered by creation/modification date and time:
+
+1. 2026-04-22 19:28:26
+   audits/code_audit_report.txt
+
+2. 2026-05-04 19:53:47
+   audits/code_project_action_report.txt
+
+3. 2026-05-04 20:06:18
+   audits/core_logic_action_report.txt
+
+4. 2026-05-04 20:32:21
+   audits/2026-05-04_20-32-21_current_audit_report.txt
+
+Naming rule for new reports:
+
+  YYYY-MM-DD_HH-MM-SS_short-description.txt
+
+This keeps new reports naturally sorted by date and time.

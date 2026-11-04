@@ -50,9 +50,9 @@ make
 
 Nesta função, temos como parâmetro de entrada um `char*` (ponteiro para `char`).
 
-O retorno da função é do tipo `size_t`, escolhido por facilitar a portabilidade j[a que size_t pega o maior valor possivel de um objeto na memoria para aquela implementacao previnindo gastos desnecessarios de memórias em ambientes menores].
+O retorno da função é do tipo `size_t`, escolhido por facilitar a portabilidade, já que `size_t` representa o maior tamanho possível de um objeto na memória para aquela implementação, prevenindo gastos desnecessários de memória em ambientes menores.
 
-Comecamos validando o input da string
+Começamos validando o input da string.
 
 Definimos a variável que será o contador do tamanho da string (array), nomeada aqui como `length`, também do tipo `size_t`, pelo mesmo motivo do retorno da função (além do fato de que ela será justamente o valor retornado).
 

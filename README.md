@@ -50,10 +50,13 @@ make
 <details>
 <summary><strong>my_strlen</strong> (click to expand)</summary>
 
-In this function, the input parameter is a `char*` (pointer to `char`).  
-The function return type is `size_t`, chosen to facilitate portability regarding the size of an unsigned int, since we are dealing with the size of arrays (strings).
+In this function, the input parameter is a `char*` (pointer to `char`).
 
-We start by defining the variable that will count the string (array) length, named here as `length`, also of type `size_t`, for the same reason as the function return (in addition to the fact that it will be precisely the value returned).
+The function return type is `size_t`, chosen for portability, since `size_t` represents the largest possible object size in memory for a given implementation, preventing unnecessary memory usage on smaller environments.
+
+We start by validating the string input.
+
+We define the variable that will count the string (array) length, named here as `length`, also of type `size_t`, for the same reason as the function return (in addition to the fact that it will be precisely the value returned).
 
 The logic from there is simple: knowing that every string in C ends with the null character `\0`, we can traverse the string until we find it. This character is interpreted as `0` or `false` (since booleans do not exist natively in C), so we can simply use `while (*str)` to indicate to the program that it should traverse the pointer starting at the input string until it finds the `\0`. With each loop iteration, we increment `length` by 1, accumulating the string size.
 

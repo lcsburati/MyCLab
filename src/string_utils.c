@@ -6,13 +6,18 @@
 #include "math_utils.h" 
 #include "string_utils.h"
 
+
 /*Functions*/
-size_t my_strlen(string str)
+
+
+size_t my_strlen(char *str)
 {
+    /*Checking if the input is null*/
     if (str == NULL)
     {
         return 0;
     }
+
 
     size_t length = 0;
 
@@ -30,7 +35,7 @@ size_t my_strlen(string str)
     return length;
 }
 
-string my_toupper(string str)
+char * my_toupper(char * str)
 {
     if (str == NULL)
     {
@@ -44,13 +49,13 @@ string my_toupper(string str)
         return NULL;
     }
 
-    string result = malloc(sizeof(char) * (length + 1));
+    char * result = malloc(sizeof(char) * (length + 1));
     if (result == NULL)
     {
         printf("Memory allocation failed\n");
         return NULL;
     }
-    string current = result;
+    char * current = result;
 
     while (*str)
     {
@@ -71,7 +76,7 @@ string my_toupper(string str)
     return result;
 }
 
-string my_tolower(string str)
+char * my_tolower(char * str)
 {
     if (str == NULL)
     {
@@ -85,13 +90,13 @@ string my_tolower(string str)
         return NULL;
     }
 
-    string result = malloc(sizeof(char) * (length + 1));
+    char * result = malloc(sizeof(char) * (length + 1));
     if (result == NULL)
     {
         printf("Memory allocation failed\n");
         return NULL;
     }
-    string current = result;
+    char * current = result;
 
 
     while (*str)
@@ -115,7 +120,7 @@ string my_tolower(string str)
     return result;
 }
 
-int my_strcmp(string str1, string str2)
+int my_strcmp(char * str1, char * str2)
 {
     if (str1 == NULL || str2 == NULL)
     {
@@ -136,8 +141,7 @@ int my_strcmp(string str1, string str2)
     return (unsigned char)*str1 - (unsigned char)*str2;
 }
 
-
-double my_strcmp_percent(string str1, string str2)
+double my_strcmp_percent(char * str1, char * str2)
 {   
     if (str1 == NULL || str2 == NULL)
     {

@@ -41,8 +41,6 @@ make
 
 * OBS: A escolha de #define ao invés de const foi dada devido a simplicidade das variaveis, uma vez que a tipagem nao vai ser importante no tempo de execução.
 
-* typedef char * string: define um apelido para char*. Poderíamos ter trabalhado diretamente com ponteiros, mas, para facilitar o entendimento de como strings funcionam por baixo dos panos, optei por usar o apelido string para char*. (Entendo que nao é uma boa prática em C esconder ponteiros em typedef's, mas o caso foi apenas para garantir o entendimento de que strings sao naturalmente ponteiros).
-
 ### string_utils.c
 
 > Este é o par de string_utils.h e será onde a lógica das funcoes protótipas definidas no header serao aplicadas.
@@ -50,10 +48,13 @@ make
 <details>
 <summary><strong>my_strlen</strong> (clique para expandir)</summary>
 
-Nesta função, temos como parâmetro de entrada um tipo `string` (`char*` — ponteiro para `char`).  
-O retorno da função é do tipo `size_t`, escolhido por facilitar a portabilidade em relação ao tamanho de um `int` unsigned, já que estamos lidando com o tamanho de arrays (strings).
+Nesta função, temos como parâmetro de entrada um tipo `my_string` (struct definida em string_utils.h).
 
-Começamos definindo a variável que será o contador do tamanho da string (array), nomeada aqui como `length`, também do tipo `size_t`, pelo mesmo motivo do retorno da função (além do fato de que ela será justamente o valor retornado).
+O retorno da função é do tipo `size_t`, escolhido por facilitar a portabilidade j[a que size_t pega o maior valor possivel de um objeto na memoria para aquela implementacao previnindo gastos desnecessarios de memórias em ambientes menores].
+
+Comecamos validando o input da string
+
+Definimos a variável que será o contador do tamanho da string (array), nomeada aqui como `length`, também do tipo `size_t`, pelo mesmo motivo do retorno da função (além do fato de que ela será justamente o valor retornado).
 
 A lógica a partir daí é simples: sabendo que toda string em C termina com o caractere nulo `\0`, podemos percorrer a string até encontrá-lo. Esse caractere é interpretado como `0` ou `false` (já que booleanos não existem nativamente em C), então podemos simplesmente usar `while (*str)` para indicar ao programa que ele deve percorrer o ponteiro iniciado na string de entrada até encontrar o `\0`. A cada iteração do loop, incrementamos `length` em 1, acumulando assim o tamanho da string.
 

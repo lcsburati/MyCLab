@@ -66,7 +66,7 @@ include/        # headers (string_utils.h, math_utils.h, ui.h)
 src/            # implementations (string_utils.c, math_utils.c = manual; main.c, ui.c = AI)
 resources/      # font.ttf (copied into build/)
 assets/         # screenshots for README
-audits/         # generated code-audit / action reports (plain text)
+audits/         # generated code-audit / action reports (plain text, gitignored)
 ai/agents/      # agent specifications (e.g. auditor.md)
 ai/pkm/         # Personal Knowledge Management — deep project docs (see below)
 build/, obj/    # build artifacts (gitignored)

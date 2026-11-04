@@ -37,3 +37,7 @@ install_manifest.txt
 #agents directories
 .opencode
 .claude
+
+# Generated review / audit reports (kept locally only)
+audits/
+reviews/

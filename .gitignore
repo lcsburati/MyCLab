@@ -41,3 +41,6 @@ install_manifest.txt
 # Generated review / audit reports (kept locally only)
 audits/
 reviews/
+
+# Generated PDF reports
+*.pdf

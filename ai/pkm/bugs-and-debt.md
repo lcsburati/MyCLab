@@ -28,9 +28,6 @@
 
 ## Technical Debt - LOW Severity
 
-### 6. `typedef char * string` obscures pointer semantics
-- Pedagogical decision by the author, but may cause confusion about ownership and mutability
-
 ### 7. Code duplication between toupper/tolower
 - 40+ identical lines between the two functions; could share a helper function
 
@@ -46,6 +43,7 @@
 
 ## Recently Fixed / No Longer Current
 
+- `typedef char * string` was removed (2026-11-04); the API now uses plain `char *`.
 - `my_strcmp` now stops at the first `\0` and returns the unsigned-character difference, closer to standard `strcmp` behavior.
 - `my_strcmp_percent` now checks outer and inner `malloc` calls and frees previously allocated rows on partial allocation failure.
 - `my_strlen` now returns `STR_BUFFER + 1` when the buffer limit is reached, separating overflow from an empty string result.

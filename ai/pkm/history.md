@@ -53,3 +53,4 @@ The project evolved in distinct phases:
 | - | Separation of concerns refactoring |
 | 2026-04-22 | Code audit completed |
 | 2026-04-22 | PKM created |
+| 2026-11-04 | Removed `typedef char * string`; API uses plain `char *` |

@@ -41,7 +41,7 @@ make
 
 * OBS: The choice of #define instead of const was due to the simplicity of the variables, since typing will not be important at runtime.
 
-* `typedef char * string`: defines an alias for char*. We could have worked directly with pointers, but to facilitate understanding of how strings work under the hood, I chose to use the alias string for char*. (I understand that hiding pointers in typedefs is not a good practice in C, but in this case it was only to ensure the understanding that strings are naturally pointers).
+* OBS: Earlier versions defined `typedef char * string` as a pedagogical alias for `char*`. It was removed because hiding pointers behind a typedef obscures ownership and mutability; the API now uses plain `char *` so the pointer semantics stay visible.
 
 ### string_utils.c
 
@@ -50,7 +50,7 @@ make
 <details>
 <summary><strong>my_strlen</strong> (click to expand)</summary>
 
-In this function, the input parameter is a `string` type (`char*` — pointer to `char`).  
+In this function, the input parameter is a `char*` (pointer to `char`).  
 The function return type is `size_t`, chosen to facilitate portability regarding the size of an unsigned int, since we are dealing with the size of arrays (strings).
 
 We start by defining the variable that will count the string (array) length, named here as `length`, also of type `size_t`, for the same reason as the function return (in addition to the fact that it will be precisely the value returned).
@@ -82,7 +82,7 @@ We start by defining the necessary variables for processing: `length` (`size_t`)
 
 After allocation, we verify that `malloc` was successful; otherwise, the function returns `NULL` (preventing failures if there is no contiguous space in memory for block allocation).
 
-We also define an auxiliary pointer `string current = result`. This allows us to traverse and fill the new memory block without losing the reference to the beginning of the block (`result`), which will be necessary for the function return.
+We also define an auxiliary pointer `char * current = result`. This allows us to traverse and fill the new memory block without losing the reference to the beginning of the block (`result`), which will be necessary for the function return.
 
 The conversion logic traverses the input string (`str`): we check if the current character is a lowercase letter; if so, we convert to uppercase by subtracting the `OFFSET` value (32) from the ASCII value of the character. Otherwise, we simply copy the original character to the new block.
 

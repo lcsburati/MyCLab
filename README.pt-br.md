@@ -48,7 +48,7 @@ make
 <details>
 <summary><strong>my_strlen</strong> (clique para expandir)</summary>
 
-Nesta função, temos como parâmetro de entrada um tipo `my_string` (struct definida em string_utils.h).
+Nesta função, temos como parâmetro de entrada um `char*` (ponteiro para `char`).
 
 O retorno da função é do tipo `size_t`, escolhido por facilitar a portabilidade j[a que size_t pega o maior valor possivel de um objeto na memoria para aquela implementacao previnindo gastos desnecessarios de memórias em ambientes menores].
 
@@ -83,7 +83,7 @@ Começamos definindo as variáveis necessárias para o processamento: o `length`
 
 Após a alocação, fazemos uma verificação para garantir que o `malloc` foi realizado com sucesso; caso contrário, a função retorna `NULL` (evitando falhas caso não haja espaço contíguo na memória para a alocação do bloco).
 
-Definimos também um ponteiro auxiliar `string current = result`. Isso nos permite percorrer e preencher o novo bloco de memória sem perder a referência do início do bloco (`result`), que será necessária para o retorno da função.
+Definimos também um ponteiro auxiliar `char * current = result`. Isso nos permite percorrer e preencher o novo bloco de memória sem perder a referência do início do bloco (`result`), que será necessária para o retorno da função.
 
 A lógica de conversão percorre a string de entrada (`str`): verificamos se o caractere atual é uma letra minúscula; caso seja, convertemos para maiúscula subtraindo o valor de `OFFSET` (32) ao valor ASCII do caractere. Caso contrário, apenas copiamos o caractere original para o novo bloco.
 

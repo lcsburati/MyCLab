@@ -4,9 +4,10 @@
 - **Reason:** Educational purpose - understand how things work under the hood
 - **Trade-off:** Functions may have bugs/inefficiencies vs battle-tested libc functions
 
-## 2. `typedef char * string`
-- **Reason:** Pedagogical simplification to make code more readable for beginners
-- **Trade-off:** Hides pointer semantics, may cause confusion about memory ownership
+## 2. `typedef char * string` (removed 2026-11-04)
+- **Original reason:** Pedagogical simplification to make code more readable for beginners
+- **Why it was removed:** Hiding pointers behind a typedef obscures ownership and mutability; the API now uses plain `char *` so pointer semantics stay visible
+- **Status:** Reverted. Do not reintroduce.
 
 ## 3. Heap allocation for toupper/tolower
 - **Reason:** Return a new string without modifying the original (immutability)

@@ -85,25 +85,26 @@ Backend (`string_utils`, `math_utils`) is independent of the UI — keep it that
 
 ## Conventions in the manual code
 
-- `typedef char * string;` — a pedagogical alias for `char*`. Intentional, even though
-  hiding pointers behind typedefs is normally discouraged. Don't "fix" it without asking.
+- Plain `char *` everywhere. The former `typedef char * string;` alias was removed on
+  2026-11-04 because hiding pointers behind typedefs obscures ownership and mutability.
+  Don't reintroduce it.
 - `#define OFFSET ('a' - 'A')` (= 32) and `#define STR_BUFFER 256` — `#define` over `const`
   is a deliberate choice for these.
 - **Memory ownership:** `my_toupper` / `my_tolower` return a **heap-allocated** string;
   the *caller must `free()`*. They return `NULL` on invalid/empty input.
-- **Error sentinels:** `my_strlen` returns `0` on `NULL` or on reaching `STR_BUFFER`
-  (note: this conflates "empty" with "error/overflow" — a known limitation).
+- **Error sentinels:** `my_strlen` returns `0` on `NULL` and `STR_BUFFER + 1` on reaching
+  `STR_BUFFER` (note: `0` still conflates "empty" with "NULL" — a known limitation).
 - Style: Allman braces, 4-space indent, comment headers grouping sections.
 
 ## Public API (quick reference)
 
 | Function | Header | Returns |
 |----------|--------|---------|
-| `size_t my_strlen(string)` | string_utils.h | length, or 0 on NULL/overflow |
-| `string my_toupper(string)` | string_utils.h | new heap string (free it) / NULL |
-| `string my_tolower(string)` | string_utils.h | new heap string (free it) / NULL |
-| `int my_strcmp(string, string)` | string_utils.h | 0 if equal; difference of first mismatching byte; nonzero sentinel if either arg is NULL |
-| `double my_strcmp_percent(string, string)` | string_utils.h | 0.0–100.0 similarity (Levenshtein) |
+| `size_t my_strlen(char *)` | string_utils.h | length; 0 on NULL; `STR_BUFFER + 1` on overflow |
+| `char * my_toupper(char *)` | string_utils.h | new heap string (free it) / NULL |
+| `char * my_tolower(char *)` | string_utils.h | new heap string (free it) / NULL |
+| `int my_strcmp(char *, char *)` | string_utils.h | 0 if equal; difference of first mismatching byte; nonzero sentinel if either arg is NULL |
+| `double my_strcmp_percent(char *, char *)` | string_utils.h | 0.0–100.0 similarity (Levenshtein); negative on error |
 | `int min(int, int, int)` | math_utils.h | smallest of three |
 
 Full reference with line numbers: `ai/pkm/api.md`.

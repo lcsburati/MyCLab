@@ -9,15 +9,14 @@
 
 ## Types
 
-```c
-typedef char * string;  // Alias for char* (pedagogical decision)
-```
+No custom types. All string parameters and returns are plain `char *`
+(the former `typedef char * string` alias was removed on 2026-11-04; see decisions.md #2).
 
 ## String Utilities (`string_utils.h`)
 
 ### `my_strlen`
 ```c
-size_t my_strlen(string str);
+size_t my_strlen(char *str);
 ```
 - **Purpose:** Calculates string length
 - **Returns:** String length, `0` if `NULL`, or `STR_BUFFER + 1` if the buffer limit is reached
@@ -27,7 +26,7 @@ size_t my_strlen(string str);
 
 ### `my_toupper`
 ```c
-string my_toupper(string str);
+char *my_toupper(char *str);
 ```
 - **Purpose:** Converts string to UPPERCASE
 - **Returns:** New heap-allocated string (caller must free()), or NULL if input is NULL, empty, above STR_BUFFER, or allocation fails
@@ -37,7 +36,7 @@ string my_toupper(string str);
 
 ### `my_tolower`
 ```c
-string my_tolower(string str);
+char *my_tolower(char *str);
 ```
 - **Purpose:** Converts string to lowercase
 - **Returns:** New heap-allocated string (caller must free()), or NULL if input is NULL, empty, above STR_BUFFER, or allocation fails
@@ -47,7 +46,7 @@ string my_tolower(string str);
 
 ### `my_strcmp`
 ```c
-int my_strcmp(string str1, string str2);
+int my_strcmp(char *str1, char *str2);
 ```
 - **Purpose:** Compares two strings
 - **Returns:** 0 if equal; negative/positive difference between the first different characters; 1 during the initial NULL check
@@ -57,7 +56,7 @@ int my_strcmp(string str1, string str2);
 
 ### `my_strcmp_percent`
 ```c
-double my_strcmp_percent(string str1, string str2);
+double my_strcmp_percent(char *str1, char *str2);
 ```
 - **Purpose:** Calculates similarity percentage between two strings
 - **Returns:** 0.0 to 100.0 for valid similarity percentage; negative values for error/sentinel cases
